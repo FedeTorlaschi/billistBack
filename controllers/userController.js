@@ -50,3 +50,71 @@ exports.login = async (req, res) => {
         res.status(500).json({ message: 'Error al iniciar sesión', error });
     }
 };
+exports.updateProfile = async (req, res) => {
+        try {
+            const userId = req.user.id; // Obtenemos el ID del usuario autenticado del middleware
+            const { email, name } = req.body;
+    
+            // Actualizar los datos del usuario
+            const user = await User.findByPk(userId);
+    
+            if (!user) {
+                return res.status(404).json({ message: 'Usuario no encontrado' });
+            }
+    
+            user.email = email || user.email;
+            user.name = name || user.name;
+    
+            await user.save();
+    
+            res.json({ message: 'Perfil actualizado con éxito', user });
+        } catch (error) {
+            res.status(500).json({ message: 'Error al actualizar el perfil', error });
+        }
+    };
+    
+    exports.changePassword = async (req, res) => {
+        try {
+            const userId = req.user.id; // Obtenemos el ID del usuario autenticado
+            const { currentPassword, newPassword } = req.body;
+    
+            // Validar el usuario
+            const user = await User.findByPk(userId);
+            if (!user) {
+                return res.status(404).json({ message: 'Usuario no encontrado' });
+            }
+    
+            // Verificar la contraseña actual
+            const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+            if (!isPasswordValid) {
+                return res.status(400).json({ message: 'Contraseña actual incorrecta' });
+            }
+    
+            // Hash de la nueva contraseña
+            user.password = await bcrypt.hash(newPassword, 10);
+            await user.save();
+    
+            res.json({ message: 'Contraseña actualizada con éxito' });
+        } catch (error) {
+            res.status(500).json({ message: 'Error al cambiar la contraseña', error });
+        }
+    };
+    exports.deleteAccount = async (req, res) => {
+        try {
+            const userId = req.user.id;
+    
+            // Validar el usuario
+            const user = await User.findByPk(userId);
+            if (!user) {
+                return res.status(404).json({ message: 'Usuario no encontrado' });
+            }
+    
+            await user.destroy();
+    
+            res.json({ message: 'Cuenta eliminada con éxito' });
+        } catch (error) {
+            res.status(500).json({ message: 'Error al eliminar la cuenta', error });
+        }
+    };
+        
+
