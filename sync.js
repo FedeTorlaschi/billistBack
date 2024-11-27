@@ -1,6 +1,7 @@
 const sequelize = require('./config/db');
 const User = require('./models/User');
 const Project = require('./models/Project');
+const Ticket = require('./models/Ticket');
 
 sequelize.sync({ force: true }) // Cambia a `{ alter: true }` en producción para actualizar sin perder datos
   .then(() => {

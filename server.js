@@ -4,6 +4,8 @@ const dotenv = require('dotenv');
 const sequelize = require('./config/db'); // Conexión a la base de datos
 const userRoutes = require('./routes/user');
 const projectRoutes = require('./routes/project');
+const ticketRoutes = require('./routes/ticket');
+
 
 
 dotenv.config();
@@ -15,6 +17,7 @@ app.use(express.json()); // Parseo de JSON
 // Rutas
 app.use('/user', userRoutes);
 app.use('/projects', projectRoutes);
+app.use('/tickets', ticketRoutes);
 
 const PORT = process.env.PORT || 3001;
 

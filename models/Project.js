@@ -1,6 +1,7 @@
 const { DataTypes } = require('sequelize');
-const sequelize = require('../config/db'); // Asegúrate de importar tu conexión de base de datos
-const User = require('./User'); // Importamos el modelo de Usuario
+const sequelize = require('../config/db'); 
+const User = require('./User'); 
+const Ticket = require('./Ticket');
 
 const Project = sequelize.define('Project', {
     id: {
@@ -25,5 +26,9 @@ const Project = sequelize.define('Project', {
 // Relación de muchos a muchos entre Project y User (un proyecto puede tener varios miembros)
 Project.belongsToMany(User, { through: 'UserProjects' });
 User.belongsToMany(Project, { through: 'UserProjects' });
+
+// Relación uno a muchos entre project y ticket
+Project.hasMany(Ticket, { foreignKey: 'projectId', as: 'tickets' });
+Ticket.belongsTo(Project, { foreignKey: 'projectId', as: 'project' });
 
 module.exports = Project;
