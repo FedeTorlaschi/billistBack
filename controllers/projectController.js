@@ -20,11 +20,12 @@ exports.createProject = async (req, res) => {
 
 exports.getProjects = async (req, res) => {
     try {
-        const userId = req.user.id;  // Suponiendo que tenemos la autenticación configurada
+        const userId = req.user.id;  
         const projects = await Project.findAll({
+            attributes: ['id', 'name', 'description'],
             include: {
                 model: User,
-                through: { attributes: [] },
+                attributes: [],
                 where: { id: userId }
             }
         });
