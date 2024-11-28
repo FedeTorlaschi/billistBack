@@ -23,8 +23,15 @@ const Ticket = sequelize.define('Ticket', {
         type: DataTypes.STRING, // Guardará la URL de la imagen
         allowNull: true,
     },
+    divisionType: {
+        type: DataTypes.ENUM('equitativa', 'personalizada'),
+        allowNull: false,
+        defaultValue: 'equitativa',
+    },
 }, {
     timestamps: false,
 });
+
+
 
 module.exports = Ticket;

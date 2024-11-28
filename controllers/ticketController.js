@@ -1,6 +1,8 @@
 const Project = require('../models/Project');
 const Ticket = require('../models/Ticket');
+const User = require('../models/User')
 const { validationResult } = require('express-validator');
+const TicketUser = require('../models/TicketUser');
 
 exports.uploadTicket = async (req, res) => {
     const errors = validationResult(req);
@@ -8,26 +10,63 @@ exports.uploadTicket = async (req, res) => {
         return res.status(400).json({ errors: errors.array() });
     }
 
-    try {
-        const { date, description, amount, projectId } = req.body;
-        const project = await Project.findByPk(projectId);
+    const { date, description, amount, projectId, divisionType, contributions } = req.body;
+    const userId = req.user.id; // Usuario autenticado
+    const imagePath = req.file ? `/uploads/${req.file.filename}` : null; // Ruta de la imagen
 
+    try {
+        // Verificar si el proyecto existe y si el usuario pertenece a él
+        const project = await Project.findByPk(projectId, { include: User });
         if (!project) {
             return res.status(404).json({ message: 'El proyecto no existe' });
         }
 
+        const isUserInProject = project.Users.some(user => user.id === userId);
+        if (!isUserInProject) {
+            return res.status(403).json({ message: 'No tienes acceso a este proyecto' });
+        }
+
+        // Crear el ticket
         const ticket = await Ticket.create({
             date,
             description,
             amount,
-            image: req.file?.path || null, // Ruta de la imagen (si se subió)
-            userId: req.user.id, // ID del usuario logueado
+            image: imagePath,
+            divisionType,
             projectId,
+            userId,
         });
 
-        res.status(201).json(ticket);
+        // Calcular saldos y dividir gastos
+        const totalUsers = project.Users.length;
+        let balances = [];
+
+        if (divisionType === 'equitativa') {
+            const share = amount / totalUsers;
+            balances = project.Users.map(user => ({
+                TicketId: ticket.id,
+                UserId: user.id,
+                balance: user.id === userId ? amount - share : -share,
+            }));
+        } else if (divisionType === 'personalizada' && contributions) {
+            balances = JSON.parse(contributions).map(({ userId, contributionPercentage }) => {
+                const userShare = (contributionPercentage / 100) * amount;
+                return {
+                    TicketId: ticket.id,
+                    UserId: userId,
+                    balance: userId === userId ? amount - userShare : -userShare,
+                };
+            });
+        } else {
+            return res.status(400).json({ message: 'Tipo de división no válido o faltan contribuciones' });
+        }
+
+        // Guardar los balances en la tabla intermedia
+        await TicketUser.bulkCreate(balances);
+
+        res.status(201).json({ message: 'Ticket subido con éxito', ticket });
     } catch (error) {
-        console.error(error);
+        console.error('Error al subir el ticket:', error);
         res.status(500).json({ message: 'Error al subir el ticket' });
     }
 };
@@ -73,4 +112,5 @@ exports.getTicketsByUser = async (req, res) => {
         res.status(500).json({ message: 'Error al obtener los tickets del usuario' });
     }
 };
+
 

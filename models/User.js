@@ -1,6 +1,7 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/db');
 const Ticket = require('./Ticket');
+const TicketUser = require('./TicketUser');
 
 
 const User = sequelize.define('User', {
@@ -13,7 +14,8 @@ const User = sequelize.define('User', {
 
 
 User.hasMany(Ticket, { foreignKey: 'userId', as: 'tickets' });
-Ticket.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+User.belongsToMany(Ticket, { through: TicketUser });
+Ticket.belongsToMany(User, { through: TicketUser });
 
 
 module.exports = User;
