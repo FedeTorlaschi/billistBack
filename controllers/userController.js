@@ -117,4 +117,46 @@ exports.updateProfile = async (req, res) => {
         }
     };
         
-
+    exports.getUserById = async (req, res) => {
+        try {
+            const { id } = req.params; // ID tomado como parámetro de ruta
+            const user = await User.findByPk(id, {
+                attributes: ['id', 'name', 'email'], // Solo devolver estos campos
+            });
+    
+            if (!user) {
+                return res.status(404).json({ message: 'Usuario no encontrado' });
+            }
+    
+            res.status(200).json(user);
+        } catch (error) {
+            console.error('Error al buscar usuario por ID:', error);
+            res.status(500).json({ message: 'Error interno del servidor' });
+        }
+    };
+    
+    exports.getUserByEmail = async (req, res) => {
+        try {
+            
+            const { email } = req.query; // Email tomado como parámetro de consulta
+    
+            if (!email) {
+                return res.status(400).json({ message: 'El parámetro email es obligatorio' });
+            }
+    
+            const user = await User.findOne({
+                where: { email },
+                attributes: ['id', 'name', 'email'],
+            });
+    
+            if (!user) {
+                return res.status(404).json({ message: 'Usuario no encontrado' });
+            }
+    
+            res.status(200).json(user);
+        } catch (error) {
+            console.error('Error al buscar usuario por email:', error);
+            res.status(500).json({ message: 'Error interno del servidor' });
+        }
+    };
+    

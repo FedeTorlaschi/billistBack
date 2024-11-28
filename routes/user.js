@@ -1,5 +1,11 @@
 const express = require('express');
-const { register, login, updateProfile, changePassword, deleteAccount } = require('../controllers/userController');
+const { register,
+    login,
+    updateProfile,
+    changePassword,
+    deleteAccount,
+    getUserById,
+    getUserByEmail } = require('../controllers/userController');
 const authenticateToken = require('../middlewares/authMiddleware');
 const { body, validationResult } = require('express-validator');
 
@@ -19,7 +25,7 @@ async (req, res) => {
     if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
     }
-    return register(req, res); // Llama al controlador si las validaciones pasan
+    return register(req, res); 
 }
 ); 
 router.post('/login',  [
@@ -31,7 +37,7 @@ async (req, res) => {
     if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
     }
-    return login(req, res); // Llama al controlador si las validaciones pasan
+    return login(req, res); 
 }
 );       
 router.put('/profile', authenticateToken, updateProfile);
@@ -41,6 +47,12 @@ router.delete('/delete-account', authenticateToken, deleteAccount);
 router.get('/profile', authenticateToken, (req, res) => {
     res.json({ message: 'Perfil del usuario', user: req.user });
 });
+
+
+// Ruta para buscar usuario por email
+router.get('/find-by-email', authenticateToken, getUserByEmail);
+// Ruta para buscar usuario por ID
+router.get('/:id', authenticateToken, getUserById);
 
 
 
