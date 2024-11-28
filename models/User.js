@@ -16,6 +16,7 @@ const User = sequelize.define('User', {
 User.hasMany(Ticket, { foreignKey: 'userId', as: 'tickets' });
 User.belongsToMany(Ticket, { through: TicketUser });
 Ticket.belongsToMany(User, { through: TicketUser });
+TicketUser.belongsTo(User, { foreignKey: 'UserId' });
 
 
 module.exports = User;

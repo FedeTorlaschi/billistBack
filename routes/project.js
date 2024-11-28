@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { createProject, getProjects, addMemberToProject } = require('../controllers/projectController');
+const projectController = require('../controllers/projectController');
 const authenticateToken = require('../middlewares/authMiddleware'); 
 const { body, validationResult } = require('express-validator');
 
@@ -36,5 +37,7 @@ async (req, res) => {
     return addMemberToProject(req, res); // Llama al controlador si las validaciones pasan
 }
 );
+
+router.get('/:projectId/my-ticket-balances', authenticateToken, projectController.getUserTicketBalances);
 
 module.exports = router;

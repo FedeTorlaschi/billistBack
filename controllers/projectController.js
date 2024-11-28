@@ -1,5 +1,7 @@
 const Project = require('../models/Project');
 const User = require('../models/User');
+const Ticket = require('../models/Ticket');
+const TicketUser = require('../models/TicketUser');
 
 exports.createProject = async (req, res) => {
     try {
@@ -52,5 +54,52 @@ exports.addMemberToProject = async (req, res) => {
         res.status(200).json({ message: 'Miembro agregado al proyecto con éxito' });
     } catch (error) {
         res.status(500).json({ message: 'Error al agregar miembro al proyecto', error });
+    }
+};
+
+exports.getUserTicketBalances = async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const userId = req.user.id; // ID del usuario logueado extraído del token
+
+        // Buscar los tickets del proyecto con los balances relacionados al usuario
+        const project = await Project.findOne({
+            where: { id: projectId },
+            include: [
+                {
+                    model: Ticket,
+                    as: 'tickets',
+                    include: [
+                        {
+                            model: TicketUser,
+                            as: 'TicketUsers',
+                            where: { UserId: userId }, // Filtrar por el usuario logueado
+                            attributes: ['balance'],
+                         }
+                            ]
+
+                }
+            ]
+        });
+
+        if (!project) {
+            return res.status(404).json({ message: 'Proyecto no encontrado' });
+        }
+        // Construir respuesta con balances por ticket
+        const ticketBalances = project.tickets.map(ticket => ({
+            ticketId: ticket.id,
+            createdBy: ticket.User,
+            description: ticket.description,
+            balance: ticket.TicketUsers[0]?.balance || 0 // Puede no haber TicketUser si no hay balance
+        }));
+
+        return res.status(200).json({
+            projectId,
+            userId,
+            ticketBalances
+        });
+    } catch (error) {
+        console.error('Error al obtener balances por ticket:', error);
+        return res.status(500).json({ message: 'Error interno del servidor' });
     }
 };

@@ -87,6 +87,8 @@ exports.getTicketsByProject = async (req, res) => {
     }
 };
 
+
+
 exports.getTicketsByUser = async (req, res) => {
     try {
         const userId = req.user.id; 
@@ -112,5 +114,7 @@ exports.getTicketsByUser = async (req, res) => {
         res.status(500).json({ message: 'Error al obtener los tickets del usuario' });
     }
 };
+
+
 
 

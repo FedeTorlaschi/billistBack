@@ -1,6 +1,7 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/db');
 
+
 const TicketUser = sequelize.define('TicketUser', {
     contributionPercentage: {
         type: DataTypes.FLOAT, // Solo si la división es personalizada
@@ -12,5 +13,6 @@ const TicketUser = sequelize.define('TicketUser', {
         defaultValue: 0,
     },
 });
+
 
 module.exports = TicketUser;

@@ -31,4 +31,6 @@ router.post(
 router.get('/:projectId', authenticate, ticketController.getTicketsByProject);
 router.get('/user', authenticate, ticketController.getTicketsByUser);
 
+
+
 module.exports = router;
