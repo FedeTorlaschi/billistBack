@@ -46,6 +46,12 @@ router.get('/:projectId/balances', authenticateToken, projectController.getProje
 router.get('/:projectId/users', authenticateToken, projectController.getProjectUsers);
 router.get('/:projectId/tickets/sum', authenticateToken, projectController.getProjectTicketsSum);
 
+
+router.get('/:projectId/tickets', authenticateToken, projectController.getTicketsByProject);
+router.get('/:projectId/creator-balance', authenticateToken, projectController.getCreatorBalanceSum);
+router.get('/:projectId/not-creator-balance', authenticateToken, projectController.getNotCreatorBalanceSum);
+
+
 router.get('/:id', authenticateToken, projectController.getProjectById);
 
 module.exports = router;

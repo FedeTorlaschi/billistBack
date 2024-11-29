@@ -2,7 +2,10 @@ const Project = require('../models/Project');
 const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 const TicketUser = require('../models/TicketUser');
+const { Op } = require('sequelize');
 const sequelize = require('../config/db'); 
+//const Op = require('../config/db'); 
+
 const { sendTemplateEmail } = require('../middlewares/emailService');
 
 exports.createProject = async (req, res) => {
@@ -305,5 +308,103 @@ exports.getProjectTicketsSum = async (req, res) => {
     } catch (error) {
         console.error('Error al calcular la suma de amounts de los tickets:', error);
         res.status(500).json({ message: 'Error al obtener la suma de los tickets.', error });
+    }
+};
+
+
+exports.getTicketsByProject = async (req, res) => {
+    try {
+        const { projectId } = req.params;
+
+        if (!projectId) {
+            return res.status(400).json({ message: 'El ID del proyecto es obligatorio.' });
+        }
+
+        const tickets = await Ticket.findAll({
+            where: { projectId },
+        });
+
+        if (!tickets || tickets.length === 0) {
+            return res.status(404).json({ message: 'No se encontraron tickets para este proyecto.' });
+        }
+
+        res.status(200).json({ tickets });
+    } catch (error) {
+        console.error('Error al obtener tickets por proyecto:', error);
+        res.status(500).json({ message: 'Error al obtener tickets por proyecto.', error });
+    }
+};
+
+
+
+exports.getCreatorBalanceSum = async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const userId = req.user.id; // Usuario logueado
+
+        if (!projectId) {
+            return res.status(400).json({ message: 'El ID del proyecto es obligatorio.' });
+        }
+
+        const totalBalance = await TicketUser.findOne({
+            attributes: [[sequelize.fn('SUM', sequelize.col('balance')), 'totalBalance']],
+            include: [
+                {
+                    model: Ticket,
+                    attributes: [], // No seleccionamos columnas del modelo Ticket
+                    where: {
+                        userId, // Tickets creados por el usuario logueado
+                        projectId,
+                    },
+                },
+            ],
+            where: {
+                UserId: userId, // Usuario relacionado con los balances
+            },
+            raw: true, // Devuelve un objeto plano
+        });
+
+        const total = totalBalance?.totalBalance || 0;
+
+        res.status(200).json({ totalBalance: total });
+    } catch (error) {
+        console.error('Error al obtener la suma de balances de tickets creados por el usuario:', error);
+        res.status(500).json({ message: 'Error al obtener la suma de balances.', error });
+    }
+};
+
+exports.getNotCreatorBalanceSum = async (req, res) => {
+    try {
+        const { projectId } = req.params;
+        const userId = req.user.id; // Usuario logueado
+
+        if (!projectId) {
+            return res.status(400).json({ message: 'El ID del proyecto es obligatorio.' });
+        }
+
+        const totalBalance = await TicketUser.findOne({
+            attributes: [[sequelize.fn('SUM', sequelize.col('balance')), 'totalBalance']],
+            include: [
+                {
+                    model: Ticket,
+                    attributes: [], // No seleccionamos columnas del modelo Ticket
+                    where: {
+                        projectId,
+                        userId: { [Op.ne]: userId }, // Excluye los tickets creados por el usuario logueado
+                    },
+                },
+            ],
+            where: {
+                UserId: userId, // Usuario relacionado con los balances
+            },
+            raw: true, // Devuelve un objeto plano
+        });
+
+        const total = totalBalance?.totalBalance || 0;
+
+        res.status(200).json({ totalBalance: total });
+    } catch (error) {
+        console.error('Error al obtener la suma de balances de tickets no creados por el usuario:', error);
+        res.status(500).json({ message: 'Error al obtener la suma de balances.', error });
     }
 };
