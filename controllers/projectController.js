@@ -282,3 +282,28 @@ exports.getProjectById = async (req, res) => {
         res.status(500).json({ message: 'Error al obtener el proyecto.', error });
     }
 };
+
+exports.getProjectTicketsSum = async (req, res) => {
+    try {
+        const { projectId } = req.params;
+
+        // Validar que el ID del proyecto esté presente
+        if (!projectId) {
+            return res.status(400).json({ message: 'El ID del proyecto es obligatorio.' });
+        }
+
+        // Calcular la suma de los amounts
+        const totalAmount = await Ticket.findOne({
+            attributes: [[sequelize.fn('SUM', sequelize.col('amount')), 'totalAmount']],
+            where: { ProjectId: projectId },
+        });
+
+        // Formatear la respuesta
+        const result = totalAmount?.dataValues?.totalAmount || 0;
+
+        res.status(200).json({ projectId, totalAmount: parseFloat(result) });
+    } catch (error) {
+        console.error('Error al calcular la suma de amounts de los tickets:', error);
+        res.status(500).json({ message: 'Error al obtener la suma de los tickets.', error });
+    }
+};

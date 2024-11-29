@@ -44,6 +44,7 @@ router.get('/:projectId/user-balances', authenticateToken, projectController.get
 
 router.get('/:projectId/balances', authenticateToken, projectController.getProjectBalances);
 router.get('/:projectId/users', authenticateToken, projectController.getProjectUsers);
+router.get('/:projectId/tickets/sum', authenticateToken, projectController.getProjectTicketsSum);
 
 router.get('/:id', authenticateToken, projectController.getProjectById);
 
