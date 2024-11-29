@@ -209,3 +209,61 @@ exports.getProjectBalances = async (req, res) => {
         res.status(500).json({ message: 'Error al obtener balances del proyecto.', error });
     }
 };
+
+
+exports.getProjectUsers = async (req, res) => {
+    try {
+        const { projectId } = req.params;
+
+        // Validar que se pase el projectId
+        if (!projectId) {
+            return res.status(400).json({ message: 'El ID del proyecto es obligatorio.' });
+        }
+
+        // Obtener los usuarios asociados al proyecto
+        const users = await User.findAll({
+            include: [
+                {
+                    model: Project,
+                    attributes: [], // No necesitamos los atributos del proyecto
+                    where: { id: projectId } // Filtrar por el ID del proyecto
+                }
+            ],
+            attributes: ['id', 'name', 'email'] // Atributos a devolver del usuario
+        });
+
+        if (!users || users.length === 0) {
+            return res.status(404).json({ message: 'No se encontraron usuarios para este proyecto.' });
+        }
+
+        res.json(users);
+    } catch (error) {
+        console.error('Error al obtener usuarios del proyecto:', error);
+        res.status(500).json({ message: 'Error al obtener usuarios del proyecto.', error });
+    }
+};
+
+exports.getProjectById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Validar que el ID sea un número
+        if (isNaN(id)) {
+            return res.status(400).json({ message: 'El ID del proyecto debe ser un número válido.' });
+        }
+
+        // Buscar el proyecto por ID
+        const project = await Project.findOne({
+            where: { id },
+        });
+
+        if (!project) {
+            return res.status(404).json({ message: 'Proyecto no encontrado.' });
+        }
+
+        res.status(200).json(project);
+    } catch (error) {
+        console.error('Error al obtener el proyecto:', error);
+        res.status(500).json({ message: 'Error al obtener el proyecto.', error });
+    }
+};
