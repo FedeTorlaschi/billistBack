@@ -34,7 +34,7 @@ const Ticket = sequelize.define('Ticket', {
 });
 
 Ticket.hasMany(TicketUser, { as: 'TicketUsers', foreignKey: 'TicketId' });
-TicketUser.belongsTo(Ticket, { foreignKey: 'TicketId' });
+TicketUser.belongsTo(Ticket, { foreignKey: 'TicketId', onUpdate: 'CASCADE' });
 
 
 module.exports = Ticket;
