@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 const TicketUser = require('../models/TicketUser');
 const sequelize = require('../config/db'); 
+const { sendTemplateEmail } = require('../middlewares/emailService');
 
 exports.createProject = async (req, res) => {
     try {
@@ -45,13 +46,27 @@ exports.addMemberToProject = async (req, res) => {
         
         // Verificar que el proyecto existe
         const project = await Project.findByPk(projectId);
-        if (!project) {
-            return res.status(404).json({ message: 'Proyecto no encontrado' });
+        const user = await User.findByPk(userId);
+
+        if (!project || !user) {
+            return res.status(404).json({ message: 'Proyecto o usuario no encontrado.' });
         }
 
         // Agregar el usuario al proyecto
-        await project.addUser(userId);
-
+        await project.addUser(user);
+        
+        // Enviar correo con plantilla
+        try {
+            await sendTemplateEmail(user.email, '¡Nuevo Proyecto Asignado!', 'userAddedToProject', {
+                name: user.name,
+                projectName: project.name,
+                projectDescription: project.description || 'Sin descripción',
+                addedBy: req.user.name,
+            });
+            console.log('Correo enviado con éxito.');
+        } catch (emailError) {
+            console.error('Error al enviar el correo:', emailError);
+        }
         res.status(200).json({ message: 'Miembro agregado al proyecto con éxito' });
     } catch (error) {
         res.status(500).json({ message: 'Error al agregar miembro al proyecto', error });
