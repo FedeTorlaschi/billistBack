@@ -54,7 +54,7 @@ exports.uploadTicket = async (req, res) => {
                 return {
                     TicketId: ticket.id,
                     UserId: userId,
-                    balance: userId === userId ? amount - userShare : -userShare,
+                    balance: req.user.id === userId ? amount - userShare : -userShare,
                 };
             });
         } else {
