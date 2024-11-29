@@ -2,6 +2,7 @@ const Project = require('../models/Project');
 const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 const TicketUser = require('../models/TicketUser');
+const sequelize = require('../config/db'); 
 
 exports.createProject = async (req, res) => {
     try {
@@ -173,3 +174,38 @@ exports.getUserBalancesInProject = async (req, res) => {
     }
 };
 
+exports.getProjectBalances = async (req, res) => {
+    try {
+        const { projectId } = req.params;
+
+        // Validar que se pase el projectId
+        if (!projectId) {
+            return res.status(400).json({ message: 'El ID del proyecto es obligatorio.' });
+        }
+
+        // Obtener los balances totales por usuario para el proyecto especificado
+        const balances = await TicketUser.findAll({
+            attributes: [
+                'UserId',
+                [sequelize.fn('SUM', sequelize.col('balance')), 'totalBalance']
+            ],
+            include: [
+                {
+                    model: Ticket,
+                    attributes: [], // No queremos información del ticket aquí
+                    where: { ProjectId: projectId } // Filtrar por proyecto
+                },
+                {
+                    model: User,
+                    attributes: ['name', 'email'] // Información del usuario
+                }
+            ],
+            group: ['UserId', 'User.name', 'User.email'], // Agrupar por atributos del usuario
+        });
+
+        res.json(balances);
+    } catch (error) {
+        console.error('Error al obtener balances del proyecto:', error);
+        res.status(500).json({ message: 'Error al obtener balances del proyecto.', error });
+    }
+};

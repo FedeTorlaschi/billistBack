@@ -42,5 +42,7 @@ router.get('/:projectId/my-ticket-balances', authenticateToken, projectControlle
 
 router.get('/:projectId/user-balances', authenticateToken, projectController.getUserBalancesInProject);
 
+router.get('/:projectId/balances', authenticateToken, projectController.getProjectBalances);
+
 
 module.exports = router;
