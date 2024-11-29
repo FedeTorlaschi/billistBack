@@ -103,3 +103,73 @@ exports.getUserTicketBalances = async (req, res) => {
         return res.status(500).json({ message: 'Error interno del servidor' });
     }
 };
+
+
+
+exports.getUserBalancesInProject = async (req, res) => {
+    const { projectId } = req.params;
+    const userId = req.user.id; // ID del usuario autenticado
+    
+    try {
+        // Obtener todos los usuarios del proyecto con su nombre y email
+        const usersInProject = await User.findAll({
+            include: {
+                model: Project,
+                where: { id: projectId },
+                attributes: []
+            },
+            attributes: ['id', 'name', 'email']
+        });
+
+        // Si no hay usuarios en el proyecto
+        if (!usersInProject || usersInProject.length === 0) {
+            return res.status(404).json({ message: 'No se encontraron usuarios en el proyecto.' });
+        }
+
+        // Cálculo del balance cruzado
+        const balances = [];
+        const loggedUserBalance = {}; // Para calcular los saldos del usuario autenticado con otros usuarios
+
+        // Obtener todos los tickets y sus balances
+        const ticketUsers = await TicketUser.findAll({
+            include: [
+                { model: Ticket, where: { projectId }, attributes: ['id', 'userId'] },
+                { model: User, attributes: ['id', 'name', 'email'] }
+            ],
+            attributes: ['UserId', 'TicketId', 'balance']
+        });
+
+        // Crear un mapa para almacenar los saldos
+        ticketUsers.forEach(({ UserId, balance, Ticket }) => {
+            const ticketOwner = Ticket.userId; // Usuario que creó el ticket
+            if (!loggedUserBalance[UserId]) loggedUserBalance[UserId] = {};
+            if (!loggedUserBalance[UserId][ticketOwner]) loggedUserBalance[UserId][ticketOwner] = 0;
+
+            loggedUserBalance[UserId][ticketOwner] += balance;
+        });
+
+        // Calcular los saldos cruzados para el usuario autenticado
+        usersInProject.forEach(otherUser => {
+            if (otherUser.id !== userId) {
+                const balanceConOtro = (loggedUserBalance[userId]?.[otherUser.id] || 0) -
+                                       (loggedUserBalance[otherUser.id]?.[userId] || 0);
+
+                balances.push({
+                    user: userId,
+                    userComparacion: {
+                        id: otherUser.id,
+                        name: otherUser.name,
+                        email: otherUser.email
+                    },
+                    saldo: balanceConOtro
+                });
+            }
+        });
+
+        res.json(balances);
+    } catch (error) {
+        console.error('Error al obtener los balances del usuario:', error);
+        res.status(500).json({ message: 'Error interno del servidor', error });
+    }
+};
+

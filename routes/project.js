@@ -40,4 +40,7 @@ async (req, res) => {
 
 router.get('/:projectId/my-ticket-balances', authenticateToken, projectController.getUserTicketBalances);
 
+router.get('/:projectId/user-balances', authenticateToken, projectController.getUserBalancesInProject);
+
+
 module.exports = router;
