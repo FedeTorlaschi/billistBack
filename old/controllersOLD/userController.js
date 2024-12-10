@@ -5,20 +5,16 @@ const User = require('../models/User');
 // REGISTRARSE
 exports.signup = async (req, res) => {
     try {
-        const { username, email, password } = req.body;
-        // validar si el usuario ya existe
-        const existingUserByEMail = await User.findOne({ where: { email } });
-        if (existingUserByEmail) {
-            return res.status(400).json({ message: 'La dirección email ya está en uso' });
+        const { email, password, username } = req.body;
+        // Validar si el usuario ya existe
+        const existingUser = await User.findOne({ where: { email } });
+        if (existingUser) {
+            return res.status(400).json({ message: 'El usuario ya está registrado' });
         }
-        const existingUserByUsername = await User.findOne({ where: { username } });
-        if (existingUserByUsername) {
-            return res.status(400).json({ message: 'El nombre de usuario ya está en uso' });
-        }
-        // hash de la contraseña
+        // Hash de la contraseña
         const hashedPassword = await bcrypt.hash(password, 10);
-        // crear el usuario
-        const user = await User.create({ username, email, password: hashedPassword });
+        // Crear el usuario
+        const user = await User.create({ email, password: hashedPassword, username });
         res.status(201).json({ message: 'Usuario registrado exitosamente', user });
     } catch (error) {
         res.status(500).json({ message: 'Error al registrar usuario', error });
@@ -29,18 +25,18 @@ exports.signup = async (req, res) => {
 exports.login = async (req, res) => {
     try {
         const { email, password } = req.body;
-        // buscar al usuario por correo
+        // Buscar al usuario por correo
         const user = await User.findOne({ where: { email } });
         if (!user) {
             return res.status(401).json({ message: 'Credenciales inválidas' });
         }
-        // verificar la contraseña
+        // Verificar la contraseña
         const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
             return res.status(401).json({ message: 'Credenciales inválidas' });
         }
-        // generar un token JWT
-        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '24h' });
+        // Generar un token JWT
+        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
         res.status(200).json({ message: 'Inicio de sesión exitoso', token });
     } catch (error) {
         res.status(500).json({ message: 'Error al iniciar sesión', error });
@@ -50,9 +46,9 @@ exports.login = async (req, res) => {
 // MODIFICAR PERFIL
 exports.updateUser = async (req, res) => {
     try {
-        const userId = req.user.id; // obtenemos el ID del usuario autenticado del middleware
-        const { username, email } = req.body;
-        // actualizar los datos del usuario
+        const userId = req.user.id; // Obtenemos el ID del usuario autenticado del middleware
+        const { email, username } = req.body;
+        // Actualizar los datos del usuario
         const user = await User.findByPk(userId);
         if (!user) {
             return res.status(404).json({ message: 'Usuario no encontrado' });
@@ -67,34 +63,34 @@ exports.updateUser = async (req, res) => {
 };
 
 // CAMBIAR CONTRASEÑA
-exports.updatePassword = async (req, res) => {
+exports.changePassword = async (req, res) => {
     try {
-        const userId = req.user.id; // obtenemos el ID del usuario autenticado
+        const userId = req.user.id; // Obtenemos el ID del usuario autenticado
         const { currentPassword, newPassword } = req.body;
-        // validar el usuario
+        // Validar el usuario
         const user = await User.findByPk(userId);
         if (!user) {
             return res.status(404).json({ message: 'Usuario no encontrado' });
         }
-        // verificar la contraseña actual
+        // Verificar la contraseña actual
         const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
         if (!isPasswordValid) {
             return res.status(400).json({ message: 'Contraseña actual incorrecta' });
         }
-        // hash de la nueva contraseña
+        // Hash de la nueva contraseña
         user.password = await bcrypt.hash(newPassword, 10);
         await user.save();
         res.status(200).json({ message: 'Contraseña actualizada con éxito' });
     } catch (error) {
-        res.status(500).json({ message: 'Error al actualizar la contraseña', error });
+        res.status(500).json({ message: 'Error al cambiar la contraseña', error });
     }
 };
 
-// ELIMINAR CUENTA EN SESIÓN
+// ELIMINAR CUENTA
 exports.deleteUser = async (req, res) => {
     try {
         const userId = req.user.id;
-        // validar el usuario
+        // Validar el usuario
         const user = await User.findByPk(userId);
         if (!user) {
             return res.status(404).json({ message: 'Usuario no encontrado' });
@@ -114,14 +110,14 @@ exports.getUserById = async (req, res) => {
             return res.status(400).json({ message: 'El parámetro id es obligatorio' });
         }
         const user = await User.findByPk(id, {
-            attributes: ['id', 'username', 'email'] // solo devolver estos campos
+            attributes: ['id', 'username', 'email'], // Solo devolver estos campos
         });
         if (!user) {
             return res.status(404).json({ message: 'Usuario no encontrado' });
         }
         res.status(200).json(user);
     } catch (error) {
-        // console.error('Error al buscar usuario por ID', error);
+        console.error('Error al buscar usuario por ID:', error);
         res.status(500).json({ message: 'Error interno del servidor' });
     }
 };
@@ -129,20 +125,25 @@ exports.getUserById = async (req, res) => {
 // OBTENER USUARIO POR SU EMAIL
 exports.getUserByEmail = async (req, res) => {
     try {
-        const { email } = req.query; // email tomado como parámetro de consulta
+        
+        const { email } = req.query; // Email tomado como parámetro de consulta
+
         if (!email) {
             return res.status(400).json({ message: 'El parámetro email es obligatorio' });
         }
+
         const user = await User.findOne({
             where: { email },
-            attributes: ['id', 'username', 'email']
+            attributes: ['id', 'username', 'email'],
         });
+
         if (!user) {
             return res.status(404).json({ message: 'Usuario no encontrado' });
         }
+
         res.status(200).json(user);
     } catch (error) {
-        console.error('Error al buscar usuario por email', error);
+        console.error('Error al buscar usuario por email:', error);
         res.status(500).json({ message: 'Error interno del servidor' });
     }
 };
@@ -150,20 +151,20 @@ exports.getUserByEmail = async (req, res) => {
 // OBTENER USUARIO POR SU USERNAME
 exports.getUserByUsername = async (req, res) => {
     try {
-        const { username } = req.query; // username tomado como parámetro de consulta
+        const { username } = req.query; // Email tomado como parámetro de consulta
         if (!username) {
             return res.status(400).json({ message: 'El parámetro username es obligatorio' });
         }
         const user = await User.findOne({
             where: { username },
-            attributes: ['id', 'username', 'email']
+            attributes: ['id', 'username', 'email'],
         });
         if (!user) {
             return res.status(404).json({ message: 'Usuario no encontrado' });
         }
         res.status(200).json(user);
     } catch (error) {
-        console.error('Error al buscar usuario por username', error);
+        console.error('Error al buscar usuario por username:', error);
         res.status(500).json({ message: 'Error interno del servidor' });
     }
 }

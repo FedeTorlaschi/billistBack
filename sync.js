@@ -1,9 +1,12 @@
 const sequelize = require('./config/db');
 const User = require('./models/User');
 const Project = require('./models/Project');
-const Ticket = require('./models/Ticket');
+const UserProject = require('./models/UserProject');
+const Bill = require('./models/Bill');
+const UserBill = require('./models/UserBill');
+const Balance = require('./models/Balance');
 
-sequelize.sync({ force: true }) // Cambia a `{ alter: true }` en producción para actualizar sin perder datos
+sequelize.sync({ force: true }) // Cambia a `{ alter: true }` en producción para actualizar sin perder datos - `{ force: true }` para perder los datos
   .then(() => {
     console.log("Tablas sincronizadas correctamente.");
     process.exit(); // Finaliza el proceso una vez que termine la sincronización

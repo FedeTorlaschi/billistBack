@@ -1,14 +1,13 @@
 const { DataTypes } = require('sequelize');
-const sequelize = require('../config/db'); 
-const User = require('./User'); 
-const Ticket = require('./Ticket');
+const sequelize = require('../config/db');
+const User = require('./User');
+const UserProject = require('./UserProject');
 
 const Project = sequelize.define('Project', {
     id: {
         type: DataTypes.INTEGER,
         primaryKey: true,
-        autoIncrement: true,
-        allowNull: false
+        autoIncrement: true
     },
     name: {
         type: DataTypes.STRING,
@@ -16,19 +15,21 @@ const Project = sequelize.define('Project', {
         unique: true
     },
     description: {
-        type: DataTypes.TEXT,
+        type: DataTypes.STRING,
         allowNull: true
+    },
+    distribution: {
+        type: DataTypes.ENUM('equals', 'custom'),
+        allowNull: false
+    },
+    created_at: {
+        type: DataTypes.DATEONLY,
+        allowNull: false
     }
-}, {
-    timestamps: false
 });
 
 // Relación de muchos a muchos entre Project y User (un proyecto puede tener varios miembros)
-Project.belongsToMany(User, { through: 'UserProjects' });
-User.belongsToMany(Project, { through: 'UserProjects' });
-
-// Relación uno a muchos entre project y ticket
-Project.hasMany(Ticket, { foreignKey: 'projectId', as: 'tickets' });
-Ticket.belongsTo(Project, { foreignKey: 'projectId', as: 'project' });
+// Project.belongsToMany(User, { through: UserProject });
+// User.belongsToMany(Project, { through: UserProject });
 
 module.exports = Project;

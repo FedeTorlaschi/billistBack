@@ -2,8 +2,9 @@ const { DataTypes } = require('sequelize');
 const sequelize = require('../config/db');
 const Project = require('./Project');
 const UserProject = require('./UserProject');
-const Bill = require('./Bill');
-const UserBill = require('./UserBill');
+const Ticket = require('./Ticket');
+const TicketUser = require('./TicketUser');
+
 
 const User = sequelize.define('User', {
     id: {
@@ -11,12 +12,12 @@ const User = sequelize.define('User', {
         primaryKey: true,
         autoIncrement: true
     },
-    username: {
+    email: {
         type: DataTypes.STRING,
         allowNull: false,
         unique: true
     },
-    email: {
+    username: {
         type: DataTypes.STRING,
         allowNull: false,
         unique: true
@@ -28,10 +29,16 @@ const User = sequelize.define('User', {
 });
 
 // Relación de muchos a muchos entre Project y User (un usuario puede tener varios proyectos)
-// Project.belongsToMany(User, { through: UserProject });
-// User.belongsToMany(Project, { through: UserProject });
+Project.belongsToMany(User, { through: UserProject });
+User.belongsToMany(Project, { through: UserProject });
 // Relación de muchos a muchos entre Bills y User (un usuario puede tener varios gastos)
-// Bill.belongsToMany(User, { through: UserBill });
-// User.belongsToMany(Bill, { through: UserBill });
+Ticket.belongsToMany(User, { through: TicketUser });
+User.belongsToMany(Ticket, { through: TicketUser });
+
+// User.hasMany(Ticket, { foreignKey: 'userId', as: 'tickets' });
+// User.belongsToMany(Ticket, { through: TicketUser });
+// Ticket.belongsToMany(User, { through: TicketUser });
+// TicketUser.belongsTo(User, { foreignKey: 'UserId' });
+
 
 module.exports = User;

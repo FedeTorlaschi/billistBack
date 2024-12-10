@@ -2,11 +2,10 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const sequelize = require('./config/db'); // Conexión a la base de datos
+
 const userRoutes = require('./routes/user');
 const projectRoutes = require('./routes/project');
-const ticketRoutes = require('./routes/ticket');
-
-
+const billRoutes = require('./routes/bill');
 
 dotenv.config();
 
@@ -16,8 +15,8 @@ app.use(express.json()); // Parseo de JSON
 
 // Rutas
 app.use('/user', userRoutes);
-app.use('/projects', projectRoutes);
-app.use('/tickets', ticketRoutes);
+app.use('/project', projectRoutes);
+app.use('/bill', billRoutes)
 
 const PORT = process.env.PORT || 3001;
 

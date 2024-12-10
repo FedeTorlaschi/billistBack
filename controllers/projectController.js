@@ -1,30 +1,113 @@
 const Project = require('../models/Project');
 const User = require('../models/User');
-const Ticket = require('../models/Ticket');
-const TicketUser = require('../models/TicketUser');
-const { Op } = require('sequelize');
-const sequelize = require('../config/db'); 
-//const Op = require('../config/db'); 
+const recalculateBalances = require('../middlewares/recalculateBalances');
 
-const { sendTemplateEmail } = require('../middlewares/emailService');
-
+// CREAR PROYECTO
 exports.createProject = async (req, res) => {
     try {
-        const { name, description } = req.body;
-        const userId = req.user.id;  // Suponiendo que tenemos la autenticación configurada
-
-        // Crear el proyecto
-        const project = await Project.create({ name, description });
-
-        // Agregar el creador del proyecto (usuario) al proyecto
+        const { name, description, distribution } = req.body;
+        const userId = req.user.id;  // suponiendo que tenemos la autenticación configurada
+        // crear el proyecto
+        const created_at = new Date().toISOString().split('T')[0];
+        const project = await Project.create({ name, description, distribution, created_at });
+        // agregar el creador del proyecto (usuario) al proyecto
         await project.addUser(userId);
-
         res.status(201).json({ message: 'Proyecto creado con éxito', project });
     } catch (error) {
         res.status(500).json({ message: 'Error al crear el proyecto', error });
     }
 };
 
+// MODIFICAR PROYECTO
+exports.updateProject = async (req, res) => {
+    const { id } = req.params; // ID del proyecto que se va a actualizar
+    const { name, description, distribution } = req.body; // Datos del proyecto y usuarios actualizados
+    try {
+        // Buscar el proyecto por ID
+        const project = await Project.findByPk(id);
+        if (!project) {
+            return res.status(404).json({ message: 'Proyecto no encontrado' });
+        }
+        // Actualizar los campos del proyecto
+        if (name) project.name = name;
+        if (description) project.description = description;
+        if (distribution) project.distribution = distribution;
+        // Guardar cambios en la base de datos
+        await project.save();
+        res.status(200).json({ message: 'Proyecto modificado exitosamente', project });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Ocurrió un error al intentar modificar el proyecto' });
+    }
+};
+
+// ELIMINAR PROYECTO
+exports.deleteProject = async (req, res) => {
+    const { id } = req.params; // ID del proyecto a eliminar
+    try {
+        // Buscar el proyecto por ID
+        const project = await Project.findByPk(id);
+        if (!project) {
+            return res.status(404).json({ mensaje: 'El proyecto no existe' });
+        }
+        // Eliminar las relaciones del proyecto en UserProjet, Bill, UserBill y Balance
+        await UserProject.destroy({ where: { project_id: id } });
+        await Bill.destroy({ where: { project_id: id } });
+        await UserBill.destroy({ where: { project_id: id } });
+        await Balance.destroy({ where: { project_id: id } });
+        // Eliminar el proyecto
+        await project.destroy();
+        res.status(200).json({ mensaje: 'Proyecto eliminado con éxito' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ mensaje: 'Ocurrió un error al intentar eliminar el proyecto' });
+    }
+};
+
+// OBTENER PROYECTO POR SU ID
+exports.getProjectById = async (req, res) => {
+    const { id } = req.params; // ID del proyecto a buscar
+    try {
+        // Buscar el proyecto por ID, incluyendo los usuarios relacionados
+        const project = await Project.findByPk(id, {
+            include: {
+                model: User,
+                through: { attributes: ['custom'] } // Incluir solo el campo "custom" de la relación
+            }
+        });
+        if (!project) {
+            return res.status(404).json({ mensaje: 'Proyecto no encotrado' });
+        }
+        res.status(200).json(project);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ mensaje: 'Ocurrió un error al intentar obtener el proyecto' });
+    }
+};
+
+// OBTENER PROYECTO POR SU NOMBRE
+exports.getProjectByName = async (req, res) => {
+    const { name } = req.body.name; // Nombre del proyecto a buscar
+    try {
+        // Buscar el proyecto por nombre, incluyendo los usuarios relacionados
+        const project = await Project.findOne({
+            where: { name },
+            include: {
+                model: User,
+                through: { attributes: ['custom'] } // Incluir solo el campo "custom" de la relación
+            }
+        });
+        if (!project) {
+            return res.status(404).json({ mensaje: 'Proyecto no encotrado' });
+        }
+        res.status(200).json(project);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ mensaje: 'Ocurrió un error al intentar obtener el proyecto' });
+    }
+};
+
+// OBTENER PROYECTOS DEL USUARIO EN SESIÓN
 exports.getProjects = async (req, res) => {
     try {
         const userId = req.user.id;  
@@ -36,375 +119,165 @@ exports.getProjects = async (req, res) => {
                 where: { id: userId }
             }
         });
-
         res.status(200).json({ projects });
     } catch (error) {
         res.status(500).json({ message: 'Error al obtener los proyectos', error });
     }
 };
 
+// AGREGAR UN MIEMBRO A UN PROYECTO
 exports.addMemberToProject = async (req, res) => {
     try {
         const { projectId, userId } = req.body;
-        
-        // Verificar que el proyecto existe
+        // Buscar el proyecto
         const project = await Project.findByPk(projectId);
+        if (!project) {
+            return res.status(404).json({ message: 'Proyecto no encontrado' });
+        }
+        // Buscar el usuario
         const user = await User.findByPk(userId);
-
-        if (!project || !user) {
-            return res.status(404).json({ message: 'Proyecto o usuario no encontrado.' });
+        if (!user) {
+            return res.status(404).json({ message: 'Usuario no encontrado' });
         }
-
-        // Agregar el usuario al proyecto
+        // Verificar si ya existe la relación
+        const existingRelation = await project.hasUser(user);
+        if (existingRelation) {
+            return res.status(400).json({ message: 'El usuario ya es miembro del proyecto' });
+        }
+        // Agregar al usuario al proyecto
         await project.addUser(user);
-        
-        // Enviar correo con plantilla
-        try {
-            await sendTemplateEmail(user.email, '¡Nuevo Proyecto Asignado!', 'userAddedToProject', {
-                name: user.name,
-                projectName: project.name,
-                projectDescription: project.description || 'Sin descripción',
-                addedBy: req.user.name,
-            });
-            console.log('Correo enviado con éxito.');
-        } catch (emailError) {
-            console.error('Error al enviar el correo:', emailError);
-        }
-        res.status(200).json({ message: 'Miembro agregado al proyecto con éxito' });
+        // Recalcular los balances
+        await recalculateBalances(projectId);
+        res.status(200).json({ message: 'Usuario agregado al proyecto con éxito' });
     } catch (error) {
+        console.error('Error al agregar miembro al proyecto:', error);
         res.status(500).json({ message: 'Error al agregar miembro al proyecto', error });
     }
 };
 
-exports.getUserTicketBalances = async (req, res) => {
+// ELIMINAR UN MIEMBRO DE UN PROYECTO
+exports.deleteMemberFromProject = async (req, res) => {
     try {
-        const { projectId } = req.params;
-        const userId = req.user.id; // ID del usuario logueado extraído del token
-
-        // Buscar los tickets del proyecto con los balances relacionados al usuario
-        const project = await Project.findOne({
-            where: { id: projectId },
-            include: [
-                {
-                    model: Ticket,
-                    as: 'tickets',
-                    include: [
-                        {
-                            model: TicketUser,
-                            as: 'TicketUsers',
-                            where: { UserId: userId }, // Filtrar por el usuario logueado
-                            attributes: ['balance'],
-                         }
-                            ]
-
-                }
-            ]
-        });
-
+        const { projectId, userId } = req.body;
+        // Buscar el proyecto
+        const project = await Project.findByPk(projectId);
         if (!project) {
             return res.status(404).json({ message: 'Proyecto no encontrado' });
         }
-        // Construir respuesta con balances por ticket
-        const ticketBalances = project.tickets.map(ticket => ({
-            ticketId: ticket.id,
-            createdBy: ticket.User,
-            description: ticket.description,
-            balance: ticket.TicketUsers[0]?.balance || 0 // Puede no haber TicketUser si no hay balance
-        }));
-
-        return res.status(200).json({
-            projectId,
-            userId,
-            ticketBalances
-        });
+        // Buscar el usuario
+        const user = await User.findByPk(userId);
+        if (!user) {
+            return res.status(404).json({ message: 'Usuario no encontrado' });
+        }
+        // Verificar si existe la relación
+        const existingRelation = await project.hasUser(user);
+        if (!existingRelation) {
+            return res.status(400).json({ message: 'El usuario no es miembro del proyecto' });
+        }
+        // Eliminar al usuario del proyecto
+        await project.removeUser(user);
+        // Recalcular los balances
+        await recalculateBalances(projectId);
+        res.status(200).json({ message: 'Usuario eliminado del proyecto con éxito' });
     } catch (error) {
-        console.error('Error al obtener balances por ticket:', error);
-        return res.status(500).json({ message: 'Error interno del servidor' });
+        console.error('Error al eliminar miembro del proyecto:', error);
+        res.status(500).json({ message: 'Error al eliminar miembro del proyecto', error });
     }
 };
 
-
-
-exports.getUserBalancesInProject = async (req, res) => {
-    const { projectId } = req.params;
-    const userId = req.user.id; // ID del usuario autenticado
-    
+// OBTENER TODOS LOS INTEGRANTES DE UN PROYECTO
+exports.getProjectMembers = async (req, res) => {
+    const { projectId } = req.params;  // ID del proyecto que se va a consultar
     try {
-        // Obtener todos los usuarios del proyecto con su nombre y email
-        const usersInProject = await User.findAll({
+        // Buscar el proyecto por ID
+        const project = await Project.findByPk(projectId, {
             include: {
-                model: Project,
-                where: { id: projectId },
-                attributes: []
-            },
-            attributes: ['id', 'name', 'email']
-        });
-
-        // Si no hay usuarios en el proyecto
-        if (!usersInProject || usersInProject.length === 0) {
-            return res.status(404).json({ message: 'No se encontraron usuarios en el proyecto.' });
-        }
-
-        // Cálculo del balance cruzado
-        const balances = [];
-        const loggedUserBalance = {}; // Para calcular los saldos del usuario autenticado con otros usuarios
-
-        // Obtener todos los tickets y sus balances
-        const ticketUsers = await TicketUser.findAll({
-            include: [
-                { model: Ticket, where: { projectId }, attributes: ['id', 'userId'] },
-                { model: User, attributes: ['id', 'name', 'email'] }
-            ],
-            attributes: ['UserId', 'TicketId', 'balance']
-        });
-
-        // Crear un mapa para almacenar los saldos
-        ticketUsers.forEach(({ UserId, balance, Ticket }) => {
-            const ticketOwner = Ticket.userId; // Usuario que creó el ticket
-            if (!loggedUserBalance[UserId]) loggedUserBalance[UserId] = {};
-            if (!loggedUserBalance[UserId][ticketOwner]) loggedUserBalance[UserId][ticketOwner] = 0;
-
-            loggedUserBalance[UserId][ticketOwner] += balance;
-        });
-
-        // Calcular los saldos cruzados para el usuario autenticado
-        usersInProject.forEach(otherUser => {
-            if (otherUser.id !== userId) {
-                const balanceConOtro = (loggedUserBalance[userId]?.[otherUser.id] || 0) -
-                                       (loggedUserBalance[otherUser.id]?.[userId] || 0);
-
-                balances.push({
-                    user: userId,
-                    userComparacion: {
-                        id: otherUser.id,
-                        name: otherUser.name,
-                        email: otherUser.email
-                    },
-                    saldo: balanceConOtro
-                });
+                model: User,  // Incluir los usuarios asociados a este proyecto
+                through: { attributes: ['percentage'] }  // Si deseas incluir el porcentaje de distribución
             }
         });
-
-        res.json(balances);
-    } catch (error) {
-        console.error('Error al obtener los balances del usuario:', error);
-        res.status(500).json({ message: 'Error interno del servidor', error });
-    }
-};
-
-exports.getProjectBalances = async (req, res) => {
-    try {
-        const { projectId } = req.params;
-
-        // Validar que se pase el projectId
-        if (!projectId) {
-            return res.status(400).json({ message: 'El ID del proyecto es obligatorio.' });
-        }
-
-        // Obtener los balances totales por usuario para el proyecto especificado
-        const balances = await TicketUser.findAll({
-            attributes: [
-                'UserId',
-                [sequelize.fn('SUM', sequelize.col('balance')), 'totalBalance']
-            ],
-            include: [
-                {
-                    model: Ticket,
-                    attributes: [], // No queremos información del ticket aquí
-                    where: { ProjectId: projectId } // Filtrar por proyecto
-                },
-                {
-                    model: User,
-                    attributes: ['name', 'email'] // Información del usuario
-                }
-            ],
-            group: ['UserId', 'User.name', 'User.email'], // Agrupar por atributos del usuario
-        });
-
-        res.json(balances);
-    } catch (error) {
-        console.error('Error al obtener balances del proyecto:', error);
-        res.status(500).json({ message: 'Error al obtener balances del proyecto.', error });
-    }
-};
-
-
-exports.getProjectUsers = async (req, res) => {
-    try {
-        const { projectId } = req.params;
-
-        // Validar que se pase el projectId
-        if (!projectId) {
-            return res.status(400).json({ message: 'El ID del proyecto es obligatorio.' });
-        }
-
-        // Obtener los usuarios asociados al proyecto
-        const users = await User.findAll({
-            include: [
-                {
-                    model: Project,
-                    attributes: [], // No necesitamos los atributos del proyecto
-                    where: { id: projectId } // Filtrar por el ID del proyecto
-                }
-            ],
-            attributes: ['id', 'name', 'email'] // Atributos a devolver del usuario
-        });
-
-        if (!users || users.length === 0) {
-            return res.status(404).json({ message: 'No se encontraron usuarios para este proyecto.' });
-        }
-
-        res.json(users);
-    } catch (error) {
-        console.error('Error al obtener usuarios del proyecto:', error);
-        res.status(500).json({ message: 'Error al obtener usuarios del proyecto.', error });
-    }
-};
-
-exports.getProjectById = async (req, res) => {
-    try {
-        const { id } = req.params;
-
-        // Validar que el ID sea un número
-        if (isNaN(id)) {
-            return res.status(400).json({ message: 'El ID del proyecto debe ser un número válido.' });
-        }
-
-        // Buscar el proyecto por ID
-        const project = await Project.findOne({
-            where: { id },
-        });
-
         if (!project) {
-            return res.status(404).json({ message: 'Proyecto no encontrado.' });
+            return res.status(404).json({ message: 'Proyecto no encontrado' });
         }
-
-        res.status(200).json(project);
+        res.status(200).json({ members: project.Users });
     } catch (error) {
-        console.error('Error al obtener el proyecto:', error);
-        res.status(500).json({ message: 'Error al obtener el proyecto.', error });
+        console.error(error);
+        res.status(500).json({ message: 'Error al obtener los miembros del proyecto', error });
     }
 };
 
-exports.getProjectTicketsSum = async (req, res) => {
+// OBTENER EL BALANCE GENERAL DE UN MIEMBRO EN UN PROYECTO
+exports.getMemberBalance = async (req, res) => {
+    const { projectId, userId } = req.params;  // IDs del proyecto y del usuario
     try {
-        const { projectId } = req.params;
-
-        // Validar que el ID del proyecto esté presente
-        if (!projectId) {
-            return res.status(400).json({ message: 'El ID del proyecto es obligatorio.' });
-        }
-
-        // Calcular la suma de los amounts
-        const totalAmount = await Ticket.findOne({
-            attributes: [[sequelize.fn('SUM', sequelize.col('amount')), 'totalAmount']],
-            where: { ProjectId: projectId },
-        });
-
-        // Formatear la respuesta
-        const result = totalAmount?.dataValues?.totalAmount || 0;
-
-        res.status(200).json({ projectId, totalAmount: parseFloat(result) });
-    } catch (error) {
-        console.error('Error al calcular la suma de amounts de los tickets:', error);
-        res.status(500).json({ message: 'Error al obtener la suma de los tickets.', error });
-    }
-};
-
-
-exports.getTicketsByProject = async (req, res) => {
-    try {
-        const { projectId } = req.params;
-
-        if (!projectId) {
-            return res.status(400).json({ message: 'El ID del proyecto es obligatorio.' });
-        }
-
-        const tickets = await Ticket.findAll({
-            where: { projectId },
-        });
-
-        if (!tickets || tickets.length === 0) {
-            return res.status(404).json({ message: 'No se encontraron tickets para este proyecto.' });
-        }
-
-        res.status(200).json({ tickets });
-    } catch (error) {
-        console.error('Error al obtener tickets por proyecto:', error);
-        res.status(500).json({ message: 'Error al obtener tickets por proyecto.', error });
-    }
-};
-
-
-
-exports.getCreatorBalanceSum = async (req, res) => {
-    try {
-        const { projectId } = req.params;
-        const userId = req.user.id; // Usuario logueado
-
-        if (!projectId) {
-            return res.status(400).json({ message: 'El ID del proyecto es obligatorio.' });
-        }
-
-        const totalBalance = await TicketUser.findOne({
-            attributes: [[sequelize.fn('SUM', sequelize.col('balance')), 'totalBalance']],
-            include: [
-                {
-                    model: Ticket,
-                    attributes: [], // No seleccionamos columnas del modelo Ticket
-                    where: {
-                        userId, // Tickets creados por el usuario logueado
-                        projectId,
-                    },
-                },
-            ],
+        // Buscar los balances del usuario en el proyecto
+        const userBalances = await Balance.findAll({
             where: {
-                UserId: userId, // Usuario relacionado con los balances
-            },
-            raw: true, // Devuelve un objeto plano
+                id_project: projectId,
+                [Op.or]: [
+                    { id_user_payer: userId },  // Si el usuario ha pagado
+                    { id_user_payed: userId }   // O si el usuario ha recibido pagos
+                ]
+            }
         });
-
-        const total = totalBalance?.totalBalance || 0;
-
-        res.status(200).json({ totalBalance: total });
+        if (!userBalances || userBalances.length === 0) {
+            return res.status(404).json({ message: 'No se encontraron balances para este usuario en el proyecto' });
+        }
+        // Calcular el balance total
+        const totalBalance = userBalances.reduce((acc, balance) => acc + balance.amount, 0);
+        res.status(200).json({ totalBalance });
     } catch (error) {
-        console.error('Error al obtener la suma de balances de tickets creados por el usuario:', error);
-        res.status(500).json({ message: 'Error al obtener la suma de balances.', error });
+        console.error(error);
+        res.status(500).json({ message: 'Error al obtener el balance del miembro en el proyecto', error });
     }
 };
 
-exports.getNotCreatorBalanceSum = async (req, res) => {
+// OBTENER EL TOTAL GASTADO EN UN PROYECTO
+exports.getTotalSpentInProject = async (req, res) => {
+    const { projectId } = req.params;  // ID del proyecto
     try {
-        const { projectId } = req.params;
-        const userId = req.user.id; // Usuario logueado
-
-        if (!projectId) {
-            return res.status(400).json({ message: 'El ID del proyecto es obligatorio.' });
-        }
-
-        const totalBalance = await TicketUser.findOne({
-            attributes: [[sequelize.fn('SUM', sequelize.col('balance')), 'totalBalance']],
-            include: [
-                {
-                    model: Ticket,
-                    attributes: [], // No seleccionamos columnas del modelo Ticket
-                    where: {
-                        projectId,
-                        userId: { [Op.ne]: userId }, // Excluye los tickets creados por el usuario logueado
-                    },
-                },
-            ],
+        // Sumar todos los gastos asociados a este proyecto
+        const totalSpent = await Bill.sum('total_amount', {
             where: {
-                UserId: userId, // Usuario relacionado con los balances
-            },
-            raw: true, // Devuelve un objeto plano
+                id_project: projectId
+            }
         });
-
-        const total = totalBalance?.totalBalance || 0;
-
-        res.status(200).json({ totalBalance: total });
+        if (totalSpent === null) {
+            return res.status(404).json({ message: 'No se encontraron gastos para este proyecto' });
+        }
+        res.status(200).json({ totalSpent });
     } catch (error) {
-        console.error('Error al obtener la suma de balances de tickets no creados por el usuario:', error);
-        res.status(500).json({ message: 'Error al obtener la suma de balances.', error });
+        console.error(error);
+        res.status(500).json({ message: 'Error al obtener el total gastado en el proyecto', error });
+    }
+};
+
+// OBTENER EL TOTAL APORTADO POR UN USUARIO EN UN PROYECTO
+exports.getTotalContributedByUser = async (req, res) => {
+    const { projectId, userId } = req.params;  // ID del proyecto y del usuario
+    try {
+        // Buscar todos los gastos del proyecto
+        const bills = await Bill.findAll({
+            where: {
+                id_project: projectId
+            }
+        });
+        if (!bills || bills.length === 0) {
+            return res.status(404).json({ message: 'No se encontraron gastos para este proyecto' });
+        }
+        // Calcular el total aportado por el usuario
+        let totalContributed = 0;
+        for (let bill of bills) {
+            const contributors = bill.contributors;  // Asumimos que la lista de contribuyentes se encuentra en el gasto
+            for (let contributor of contributors) {
+                if (contributor.userId === parseInt(userId)) {
+                    totalContributed += contributor.amount;
+                }
+            }
+        }
+        res.status(200).json({ totalContributed });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Error al obtener el total aportado por el usuario en el proyecto', error });
     }
 };
