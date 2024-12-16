@@ -3,6 +3,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const sequelize = require('./config/db'); // Conexión a la base de datos
 
+const index = require('./models/index');
 const userRoutes = require('./routes/user');
 const projectRoutes = require('./routes/project');
 const billRoutes = require('./routes/bill');
@@ -12,6 +13,7 @@ dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json()); // Parseo de JSON
+app.use(express.urlencoded({ extended: true })); // Necesario para datos enviados por formularios
 
 // Rutas
 app.use('/user', userRoutes);

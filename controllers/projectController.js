@@ -1,6 +1,12 @@
 const Project = require('../models/Project');
 const User = require('../models/User');
+const UserProject = require('../models/UserProject');
+const Bill = require('../models/Bill');
+const UserBill = require('../models/UserBill');
+const Balance = require('../models/Balance');
 const recalculateBalances = require('../middlewares/recalculateBalances');
+const { Op } = require('sequelize');
+const sequelize = require('../config/db'); // Para transacciones si es necesario
 
 // CREAR PROYECTO
 exports.createProject = async (req, res) => {
@@ -11,7 +17,12 @@ exports.createProject = async (req, res) => {
         const created_at = new Date().toISOString().split('T')[0];
         const project = await Project.create({ name, description, distribution, created_at });
         // agregar el creador del proyecto (usuario) al proyecto
-        await project.addUser(userId);
+        // await project.addUser(userId);
+        const id_user = userId;
+        const id_project = project.id;
+        const percentage = 100.00;
+        console.log ("DATOS: " + id_user + id_project + percentage)
+        const relation = await UserProject.create({ id_user, id_project, percentage});
         res.status(201).json({ message: 'Proyecto creado con éxito', project });
     } catch (error) {
         res.status(500).json({ message: 'Error al crear el proyecto', error });
@@ -50,13 +61,22 @@ exports.deleteProject = async (req, res) => {
         if (!project) {
             return res.status(404).json({ mensaje: 'El proyecto no existe' });
         }
-        // Eliminar las relaciones del proyecto en UserProjet, Bill, UserBill y Balance
-        await UserProject.destroy({ where: { project_id: id } });
-        await Bill.destroy({ where: { project_id: id } });
-        await UserBill.destroy({ where: { project_id: id } });
-        await Balance.destroy({ where: { project_id: id } });
+
+        // Buscar los Bills relacionados al proyecto
+        const bills = await Bill.findAll({ where: { id_project: id } });
+        const billIds = bills.map(bill => bill.id);
+
+        // Eliminar las relaciones en UserBill donde el id_bill esté en billIds
+        await UserBill.destroy({ where: { id_bill: billIds } });
+
+        // Eliminar las relaciones del proyecto en UserProject, Bill y Balance
+        await UserProject.destroy({ where: { id_project: id } });
+        await Bill.destroy({ where: { id_project: id } });
+        await Balance.destroy({ where: { id_project: id } });
+
         // Eliminar el proyecto
         await project.destroy();
+
         res.status(200).json({ mensaje: 'Proyecto eliminado con éxito' });
     } catch (error) {
         console.error(error);
@@ -72,7 +92,7 @@ exports.getProjectById = async (req, res) => {
         const project = await Project.findByPk(id, {
             include: {
                 model: User,
-                through: { attributes: ['custom'] } // Incluir solo el campo "custom" de la relación
+                through: { attributes: [] } // Incluir solo el campo "custom" de la relación
             }
         });
         if (!project) {
@@ -87,14 +107,14 @@ exports.getProjectById = async (req, res) => {
 
 // OBTENER PROYECTO POR SU NOMBRE
 exports.getProjectByName = async (req, res) => {
-    const { name } = req.body.name; // Nombre del proyecto a buscar
+    const { name } = req.body; // Nombre del proyecto a buscar
     try {
         // Buscar el proyecto por nombre, incluyendo los usuarios relacionados
         const project = await Project.findOne({
             where: { name },
             include: {
                 model: User,
-                through: { attributes: ['custom'] } // Incluir solo el campo "custom" de la relación
+                through: { attributes: [] } // Incluir solo el campo "custom" de la relación
             }
         });
         if (!project) {
@@ -112,7 +132,7 @@ exports.getProjects = async (req, res) => {
     try {
         const userId = req.user.id;  
         const projects = await Project.findAll({
-            attributes: ['id', 'name', 'description'],
+            attributes: ['id', 'name', 'description', 'distribution', 'created_at'],
             include: {
                 model: User,
                 attributes: [],
@@ -127,8 +147,13 @@ exports.getProjects = async (req, res) => {
 
 // AGREGAR UN MIEMBRO A UN PROYECTO
 exports.addMemberToProject = async (req, res) => {
+    const transaction = await sequelize.transaction();
     try {
         const { projectId, userId } = req.body;
+        // Validar datos
+        if (!projectId || !userId) {
+            return res.status(401).json({ message: 'ID de proyecto o ID de usuario inválido' });
+        }
         // Buscar el proyecto
         const project = await Project.findByPk(projectId);
         if (!project) {
@@ -140,16 +165,57 @@ exports.addMemberToProject = async (req, res) => {
             return res.status(404).json({ message: 'Usuario no encontrado' });
         }
         // Verificar si ya existe la relación
-        const existingRelation = await project.hasUser(user);
+        const existingRelation = await UserProject.findOne({
+            where: {
+                id_project: projectId,
+                id_user: userId
+            }
+        });
         if (existingRelation) {
             return res.status(400).json({ message: 'El usuario ya es miembro del proyecto' });
         }
         // Agregar al usuario al proyecto
-        await project.addUser(user);
-        // Recalcular los balances
+        const percentage = 0.0; // Porcentaje inicial (esto podría cambiar según tu lógica)
+        await UserProject.create({ id_user: userId, id_project: projectId, percentage }, { transaction });
+        // Crear las relaciones de balance con los demás usuarios del proyecto
+        const projectUsers = await UserProject.findAll({
+            where: { id_project: projectId },
+            attributes: ['id_user']
+        });
+        const userIds = projectUsers.map((rel) => rel.id_user);
+        // Asegurarse de que existan balances ida y vuelta para cada par de usuarios
+        for (const existingUserId of userIds) {
+            if (existingUserId !== userId) {
+                // Balance desde el nuevo usuario hacia los existentes
+                await Balance.findOrCreate({
+                    where: {
+                        id_project: projectId,
+                        id_user_payer: userId,
+                        id_user_payed: existingUserId
+                    },
+                    defaults: { amount: 0 },
+                    transaction
+                });
+                // Balance desde los existentes hacia el nuevo usuario
+                await Balance.findOrCreate({
+                    where: {
+                        id_project: projectId,
+                        id_user_payer: existingUserId,
+                        id_user_payed: userId
+                    },
+                    defaults: { amount: 0 },
+                    transaction
+                });
+            }
+        }
+        // Confirmar la transacción
+        await transaction.commit();
+        // Recalcular los balances después de agregar el usuario
         await recalculateBalances(projectId);
         res.status(200).json({ message: 'Usuario agregado al proyecto con éxito' });
     } catch (error) {
+        // Revertir la transacción en caso de error
+        await transaction.rollback();
         console.error('Error al agregar miembro al proyecto:', error);
         res.status(500).json({ message: 'Error al agregar miembro al proyecto', error });
     }
@@ -159,6 +225,12 @@ exports.addMemberToProject = async (req, res) => {
 exports.deleteMemberFromProject = async (req, res) => {
     try {
         const { projectId, userId } = req.body;
+        console.log("")
+        console.log("")
+        console.log("PROJECT ID: " + projectId)
+        console.log("USER ID: " + userId)
+        console.log("")
+        console.log("")
         // Buscar el proyecto
         const project = await Project.findByPk(projectId);
         if (!project) {
@@ -169,13 +241,20 @@ exports.deleteMemberFromProject = async (req, res) => {
         if (!user) {
             return res.status(404).json({ message: 'Usuario no encontrado' });
         }
-        // Verificar si existe la relación
-        const existingRelation = await project.hasUser(user);
+        // Verificar si ya existe la relación
+        // const existingRelation = await project.hasUser(user);
+        const existingRelation = await UserProject.findOne({
+            where: {
+                id_project: projectId,
+                id_user: userId
+            }
+        });
         if (!existingRelation) {
             return res.status(400).json({ message: 'El usuario no es miembro del proyecto' });
         }
         // Eliminar al usuario del proyecto
-        await project.removeUser(user);
+        // await project.removeUser(user);
+        existingRelation.destroy();
         // Recalcular los balances
         await recalculateBalances(projectId);
         res.status(200).json({ message: 'Usuario eliminado del proyecto con éxito' });
@@ -193,6 +272,7 @@ exports.getProjectMembers = async (req, res) => {
         const project = await Project.findByPk(projectId, {
             include: {
                 model: User,  // Incluir los usuarios asociados a este proyecto
+                attributes: ['id', 'username', 'email'],
                 through: { attributes: ['percentage'] }  // Si deseas incluir el porcentaje de distribución
             }
         });
@@ -205,6 +285,8 @@ exports.getProjectMembers = async (req, res) => {
         res.status(500).json({ message: 'Error al obtener los miembros del proyecto', error });
     }
 };
+
+// --------------------------------------------------
 
 // OBTENER EL BALANCE GENERAL DE UN MIEMBRO EN UN PROYECTO
 exports.getMemberBalance = async (req, res) => {
@@ -220,6 +302,7 @@ exports.getMemberBalance = async (req, res) => {
                 ]
             }
         });
+
         if (!userBalances || userBalances.length === 0) {
             return res.status(404).json({ message: 'No se encontraron balances para este usuario en el proyecto' });
         }

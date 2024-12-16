@@ -8,11 +8,11 @@ const UserBill = require('./UserBill');
 const Balance = require('./Balance');
 
 // Relación de muchos a muchos entre Project y User (un usuario puede tener varios proyectos y un proyecto puede tener varios miembros)
-Project.belongsToMany(User, { through: UserProject });
-User.belongsToMany(Project, { through: UserProject });
+Project.belongsToMany(User, { through: UserProject, foreignKey: 'id_project' });
+User.belongsToMany(Project, { through: UserProject, foreignKey: 'id_user' });
 // Relación de muchos a muchos entre Bills y User (un usuario puede tener varios gastos y un gasto puede ser pagado por varios usuarios)
-Bill.belongsToMany(User, { through: UserBill });
-User.belongsToMany(Bill, { through: UserBill });
+Bill.belongsToMany(User, { through: UserBill, foreignKey: 'id_bill' });
+User.belongsToMany(Bill, { through: UserBill, foreignKey: 'id_user' });
 // Relación de muchos a muchos entre Project y Bill (un proyecto puede tener muchos gastos)
 Bill.belongsTo(Project, { foreignKey: 'id_project' });
 // Relación de muchos a muchos con los usuarios (en ambos sentidos) y con el proyecto del contexto
@@ -27,5 +27,6 @@ module.exports = {
     Project,
     UserProject,
     Bill,
-    UserBill
+    UserBill,
+    Balance
 };

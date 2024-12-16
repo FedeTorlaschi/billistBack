@@ -2,6 +2,7 @@ const express = require('express');
 const { signup, login, updateUser, updatePassword, deleteUser, getUserById, getUserByEmail, getUserByUsername } = require('../controllers/userController');
 const authenticateToken = require('../middlewares/authMiddleware');
 const { body, validationResult } = require('express-validator');
+const User = require('../models/User');
 
 const router = express.Router();
 
@@ -16,7 +17,7 @@ router.post('/signup', [
     if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
     }
-    return signup(req, res); 
+    return signup(req, res);
 });
 // INICIAR SESIÓN
 router.post('/login',  [
@@ -40,7 +41,7 @@ router.get('/profile', authenticateToken, (req, res) => {
     res.json({ message: 'Perfil del usuario', user: req.user });
 });
 // OBTENER USUARIO POR ID
-router.get('//:id', authenticateToken, getUserById);
+router.get('/:id', authenticateToken, getUserById);
 // OBTENER USUARIO POR EMAIL
 router.get('/email', authenticateToken, getUserByEmail);
 // OBTENER USUARIO POR USERNAME

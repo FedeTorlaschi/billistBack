@@ -5,9 +5,10 @@ const User = require('../models/User');
 // REGISTRARSE
 exports.signup = async (req, res) => {
     try {
+        console.log("Datos recibidos:", req.body); // Verifica qué datos llegan
         const { username, email, password } = req.body;
         // validar si el usuario ya existe
-        const existingUserByEMail = await User.findOne({ where: { email } });
+        const existingUserByEmail = await User.findOne({ where: { email } });
         if (existingUserByEmail) {
             return res.status(400).json({ message: 'La dirección email ya está en uso' });
         }
@@ -21,6 +22,7 @@ exports.signup = async (req, res) => {
         const user = await User.create({ username, email, password: hashedPassword });
         res.status(201).json({ message: 'Usuario registrado exitosamente', user });
     } catch (error) {
+        console.error('Error en signup:', error); // Agrega esta línea
         res.status(500).json({ message: 'Error al registrar usuario', error });
     }
 };
@@ -70,17 +72,19 @@ exports.updateUser = async (req, res) => {
 exports.updatePassword = async (req, res) => {
     try {
         const userId = req.user.id; // obtenemos el ID del usuario autenticado
-        const { currentPassword, newPassword } = req.body;
+        const { newPassword } = req.body;
+        // const { currentPassword, newPassword } = req.body;
         // validar el usuario
         const user = await User.findByPk(userId);
         if (!user) {
             return res.status(404).json({ message: 'Usuario no encontrado' });
         }
         // verificar la contraseña actual
-        const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
-        if (!isPasswordValid) {
-            return res.status(400).json({ message: 'Contraseña actual incorrecta' });
-        }
+        // const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+        // if (!isPasswordValid) {
+        //     return res.status(400).json({ message: 'Contraseña actual incorrecta' });
+        // }
+
         // hash de la nueva contraseña
         user.password = await bcrypt.hash(newPassword, 10);
         await user.save();
@@ -129,7 +133,7 @@ exports.getUserById = async (req, res) => {
 // OBTENER USUARIO POR SU EMAIL
 exports.getUserByEmail = async (req, res) => {
     try {
-        const { email } = req.query; // email tomado como parámetro de consulta
+        const { email } = req.body;
         if (!email) {
             return res.status(400).json({ message: 'El parámetro email es obligatorio' });
         }
@@ -150,7 +154,7 @@ exports.getUserByEmail = async (req, res) => {
 // OBTENER USUARIO POR SU USERNAME
 exports.getUserByUsername = async (req, res) => {
     try {
-        const { username } = req.query; // username tomado como parámetro de consulta
+        const { username } = req.body;
         if (!username) {
             return res.status(400).json({ message: 'El parámetro username es obligatorio' });
         }

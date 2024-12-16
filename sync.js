@@ -5,6 +5,7 @@ const UserProject = require('./models/UserProject');
 const Bill = require('./models/Bill');
 const UserBill = require('./models/UserBill');
 const Balance = require('./models/Balance');
+const index = require('./models/index');
 
 sequelize.sync({ force: true }) // Cambia a `{ alter: true }` en producción para actualizar sin perder datos - `{ force: true }` para perder los datos
   .then(() => {

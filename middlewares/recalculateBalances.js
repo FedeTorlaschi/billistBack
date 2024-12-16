@@ -1,81 +1,77 @@
-const { Op } = require('sequelize');
-const Balance = require('../models/Balance');
-const UserProject = require('../models/UserProject');
-const Bill = require('../models/Bill');
-const User = require('../models/User');
+const { UserProject, Bill, UserBill, Balance } = require('../models');
 
-// FUNCION PARA RECALCULAR LOS BALANCES DE UN PROYECTO
+/**
+ * Recalcula los balances de un proyecto actualizando los registros existentes en la tabla Balance.
+ * @param {number} projectId - ID del proyecto cuyos balances se recalcularán.
+ */
 const recalculateBalances = async (projectId) => {
     try {
-        // 1. Obtener todos los usuarios del proyecto
-        const users = await User.findAll({
+        // Obtener los usuarios del proyecto y sus porcentajes
+        const userProjects = await UserProject.findAll({
+            where: { id_project: projectId },
+            attributes: ['id_user', 'percentage']
+        });
+
+        if (!userProjects.length) {
+            throw new Error('No hay usuarios en este proyecto.');
+        }
+
+        const users = userProjects.map(up => ({
+            id_user: up.id_user,
+            percentage: up.percentage / 100 // Convertir porcentaje a decimal
+        }));
+
+        // Obtener todos los gastos del proyecto y calcular el total gastado
+        const bills = await Bill.findAll({
+            where: { id_project: projectId },
             include: {
-                model: Project,
-                where: { id: projectId },
-                through: { attributes: ['percentage'] }, // Incluir el porcentaje de cada usuario
+                model: UserBill,
+                attributes: ['id_user', 'partial_amount']
             }
         });
-        // 2. Obtener el total de gastos del proyecto
-        const bills = await Bill.findAll({ where: { project_id: projectId } });
-        const totalAmount = bills.reduce((acc, bill) => acc + bill.total_amount, 0);
-        // 3. Recalcular el balance de cada usuario con el resto
-        for (const user of users) {
-            const userPercentage = user.UserProject.percentage / 100;  // Convertir porcentaje a decimal
-            const userTotalContribution = totalAmount * userPercentage;  // Lo que debe aportar el usuario
-            // Recorrer todos los demás usuarios para actualizar el balance
-            for (const otherUser of users) {
-                if (user.id !== otherUser.id) {
-                    const otherUserPercentage = otherUser.UserProject.percentage / 100;  // Porcentaje del otro usuario
-                    const otherUserTotalContribution = totalAmount * otherUserPercentage;  // Lo que debe aportar el otro usuario
-                    // Buscar si ya existe un balance entre estos dos usuarios
-                    let balance = await Balance.findOne({
-                        where: {
-                            id_project: projectId,
-                            [Op.or]: [
-                                { id_user_payer: user.id, id_user_payed: otherUser.id },
-                                { id_user_payer: otherUser.id, id_user_payed: user.id },
-                            ]
+
+        const totalSpent = bills.reduce((sum, bill) => {
+            return sum + bill.UserBills.reduce((subSum, ub) => subSum + ub.partial_amount, 0);
+        }, 0);
+
+        // Calcular el balance de cada usuario respecto al total
+        const userBalances = users.map(user => {
+            const shouldPay = user.percentage * totalSpent; // Lo que le corresponde pagar
+            const alreadyPaid = bills.reduce((sum, bill) => {
+                const userBill = bill.UserBills.find(ub => ub.id_user === user.id_user);
+                return sum + (userBill ? userBill.partial_amount : 0);
+            }, 0);
+
+            return {
+                id_user: user.id_user,
+                net_balance: shouldPay - alreadyPaid // Saldo neto (positivo si debe, negativo si pagó de más)
+            };
+        });
+
+        // Actualizar los registros en la tabla Balance
+        for (const payer of userBalances) {
+            for (const payee of userBalances) {
+                if (payer.id_user !== payee.id_user) {
+                    const amount = (payer.net_balance - payee.net_balance) / (users.length - 1);
+
+                    await Balance.update(
+                        { amount },
+                        {
+                            where: {
+                                id_project: projectId,
+                                id_user_payer: payer.id_user,
+                                id_user_payed: payee.id_user
+                            }
                         }
-                    });
-                    if (!balance) {
-                        // Si no existe, crear el balance en 0
-                        await Balance.create({
-                            id_project: projectId,
-                            id_user_payer: user.id,
-                            id_user_payed: otherUser.id,
-                            amount: 0
-                        });
-                    }
-                    // Calculamos el balance entre los dos usuarios
-                    // Si el usuario A debe más que el usuario B, el balance es positivo en el sentido A -> B
-                    // Si el usuario B debe más, el balance es negativo en el sentido B -> A
-                    const balanceAmount = userTotalContribution - otherUserTotalContribution;
-                    
-                    if (balanceAmount > 0) {
-                        // El usuario 'user' debe más, por lo que el balance será positivo
-                        await Balance.update({ amount: balanceAmount }, {
-                            where: {
-                                id_project: projectId,
-                                id_user_payer: user.id,
-                                id_user_payed: otherUser.id
-                            }
-                        });
-                    } else if (balanceAmount < 0) {
-                        // El usuario 'otherUser' debe más, por lo que el balance será negativo
-                        await Balance.update({ amount: balanceAmount }, {
-                            where: {
-                                id_project: projectId,
-                                id_user_payer: otherUser.id,
-                                id_user_payed: user.id
-                            }
-                        });
-                    }
+                    );
                 }
             }
         }
+
+        console.log(`Balances del proyecto ${projectId} recalculados correctamente.`);
     } catch (error) {
-        console.error('Error recalculando los balances:', error);
-        throw new Error('Error recalculando los balances');
+        console.error('Error al recalcular los balances:', error.message);
+        throw error;
     }
 };
 

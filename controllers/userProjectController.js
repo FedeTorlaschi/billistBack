@@ -5,7 +5,8 @@ const recalculateBalances = require('../middlewares/recalculateBalances');
 // ACTUALIZAR PORCENTAJES DE DISTRIBUCIÓN
 exports.updateDistributionPercentages = async (req, res) => {
     try {
-        const { projectId, userPercentages } = req.body;
+        const { userPercentages } = req.body;
+        const { projectId } = req.params;
         // Verificar que el proyecto existe
         const project = await Project.findByPk(projectId);
         if (!project) {
@@ -23,7 +24,7 @@ exports.updateDistributionPercentages = async (req, res) => {
             const userProject = await UserProject.findOne({
                 where: {
                     id_project: projectId,
-                    userId: userId
+                    id_user: userId
                 }
             });
             if (!userProject) {
@@ -33,10 +34,8 @@ exports.updateDistributionPercentages = async (req, res) => {
             userProject.percentage = percentage;
             await userProject.save();
         }
-
         // Recalcular los balances después de actualizar los porcentajes
         await recalculateBalances(projectId);
-
         res.status(200).json({ message: 'Porcentajes de distribución actualizados con éxito' });
     } catch (error) {
         console.error(error);

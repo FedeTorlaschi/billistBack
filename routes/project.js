@@ -35,7 +35,7 @@ router.delete('/:id', authenticateToken, deleteProject);
 // OBTENER PROYECTO POR ID
 router.get('/:id', authenticateToken, getProjectById);
 // OBTENER PROYECTO POR NOMBRE
-router.get('/name', authenticateToken, getProjectByName);
+router.post('/name', authenticateToken, getProjectByName);
 // OBTENER PROYECTOS DEL USUARIO EN SESIÓN
 router.get('/', authenticateToken, getProjects);
 // AGREGAR MIEMBRO
@@ -47,19 +47,21 @@ router.post('/add-member', authenticateToken, [
     if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
     }
-    return addMemberToProject(req, res); //lLlama al controlador si las validaciones pasan
+    return addMemberToProject(req, res); // Llama al controlador si las validaciones pasan
 });
 // ELIMINAR MIEMBRO
 router.delete('/member', authenticateToken, deleteMemberFromProject);
 // OBTENER TODOS LOS MIEMBROS DE UN PROYECTO
 router.get('/members/:projectId', authenticateToken, getProjectMembers);
+
 // OBTENER EL BALANCE GENERAL DE UN MIEMBRO DE UN PROYECTO
 router.get('/member-balance/:projectId/:userId', authenticateToken, getMemberBalance);
 // OBTENER TOTAL GASTADO EN UN PROYECTO
 router.get('/spent/:projectId', authenticateToken, getTotalSpentInProject);
 // OBTENER TOTAL GASTADO POR EL USUARIO EN SESIÓN
 router.get('/total-contributed/:projectId/:userId', authenticateToken, getTotalContributedByUser);
-// RECALCULAR BALANCES DEL PROYECTO
+
+// MODIFICAR PORCENTAJES DE DISTRIBUCIÓN DEL PROYECTO
 router.put('/redistribute/:projectId', authenticateToken, updateDistributionPercentages);
 
 
