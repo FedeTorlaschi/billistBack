@@ -171,3 +171,53 @@ exports.getUserByUsername = async (req, res) => {
         res.status(500).json({ message: 'Error interno del servidor' });
     }
 }
+
+// OBTENER LOS "AMIGOS" DEL USUARIO EN SESIÓN (todos los integrantes de todos los proyectos en los que está el usuario en sesión, una vez sola)
+exports.getFriends = async (req, res) => {
+    try {
+        // Validar que req.user.id exista y sea válido
+        const userId = req.user.id;
+
+        if (!userId || typeof userId !== 'number') {
+            return res.status(400).json({ message: 'ID de usuario inválido.' });
+        }
+
+        // Consultar todos los usuarios únicos asociados a los proyectos del usuario
+        const members = await User.findAll({
+            attributes: ['username', 'email'],
+            include: {
+                model: Project,
+                attributes: [], // No traer atributos de proyectos
+                through: { attributes: [] }, // Ignorar atributos de UserProject
+                where: { '$Projects.Users.id$': userId } // Filtrar proyectos del usuario en sesión
+            },
+            distinct: true // Evitar duplicados
+        });
+
+        if (!members.length) {
+            return res.status(404).json({ message: 'No se encontraron integrantes en los proyectos del usuario.' });
+        }
+
+        // Formatear la respuesta
+        const formattedMembers = members.map(member => ({
+            username: member.username,
+            email: member.email
+        }));
+
+        res.status(200).json(formattedMembers);
+    } catch (error) {
+        console.error('Error al obtener los integrantes de los proyectos:', error.message);
+        res.status(500).json({ message: 'Error al obtener los integrantes de los proyectos.', error });
+    }
+};
+
+const existsUserInList = (userId, list) => {
+    let exists = false;
+    for (const user of list) {
+        if (user.id===userId) {
+            exists = true;
+            break;
+        }
+    }
+    return exists;
+};

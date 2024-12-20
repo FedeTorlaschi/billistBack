@@ -5,7 +5,22 @@ const UserProject = require('./models/UserProject');
 const Bill = require('./models/Bill');
 const UserBill = require('./models/UserBill');
 const Balance = require('./models/Balance');
-const index = require('./models/index');
+// const { sequelize, User, Project, UserProject, Bill, UserBill, Balance } = require('./models/index');
+
+// Relación de muchos a muchos entre Project y User (un usuario puede tener varios proyectos y un proyecto puede tener varios miembros)
+Project.belongsToMany(User, { through: UserProject, foreignKey: 'id_project' });
+User.belongsToMany(Project, { through: UserProject, foreignKey: 'id_user' });
+// Relación de muchos a muchos entre Bills y User (un usuario puede tener varios gastos y un gasto puede ser pagado por varios usuarios)
+Bill.belongsToMany(User, { through: UserBill, foreignKey: 'id_bill' });
+User.belongsToMany(Bill, { through: UserBill, foreignKey: 'id_user' });
+UserBill.hasMany(Bill, { foreignKey: 'id_bill' });
+UserBill.hasMany(User, { foreignKey: 'id_user' });
+// Relación de muchos a muchos entre Project y Bill (un proyecto puede tener muchos gastos)
+Bill.belongsTo(Project, { foreignKey: 'id_project' });
+// Relación de muchos a muchos con los usuarios (en ambos sentidos) y con el proyecto del contexto
+Balance.belongsTo(User, { foreignKey: 'id_user_payer', as: 'payer' });
+Balance.belongsTo(User, { foreignKey: 'id_user_payed', as: 'payed' });
+Balance.belongsTo(Project, { foreignKey: 'id_project' });
 
 sequelize.sync({ force: true }) // Cambia a `{ alter: true }` en producción para actualizar sin perder datos - `{ force: true }` para perder los datos
   .then(() => {

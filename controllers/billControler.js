@@ -15,6 +15,12 @@ exports.createBill = async (req, res) => {
             { id_user: 2, partial_amount: 30 },
         ]
     */
+    console.log("Datos recibidos en /bill/create:");
+    console.log("Descripción:", description);
+    console.log("Total Amount:", total_amount);
+    console.log("ID Proyecto:", id_project);
+    console.log("Fecha:", date);
+    console.log("Contribuyentes:", contributors);
     try {
         // Validar que la suma de los partial_amount sea igual al total_amount
         if (contributors && contributors.length > 0) {
@@ -72,7 +78,6 @@ exports.createBill = async (req, res) => {
 exports.updateBill = async (req, res) => {
     const { id } = req.params; // ID del gasto que se va a actualizar
     const { description, total_amount, image, date, contributors } = req.body;
-
     try {
         // Buscar el gasto por ID
         const bill = await Bill.findByPk(id);
@@ -99,7 +104,7 @@ exports.updateBill = async (req, res) => {
 
             const EPSILON = 0.01; // Tolerancia numérica
             if (Math.abs(sumPartialAmounts - total_amount) > EPSILON) {
-                return res.status(400).json({
+                return res.status(405).json({
                     message: `La suma de los partial_amount (${sumPartialAmounts}) no coincide con el total_amount (${total_amount}).`
                 });
             }

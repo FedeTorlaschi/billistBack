@@ -286,8 +286,6 @@ exports.getProjectMembers = async (req, res) => {
     }
 };
 
-// --------------------------------------------------
-
 // OBTENER EL BALANCE GENERAL DE UN MIEMBRO EN UN PROYECTO
 exports.getMemberBalance = async (req, res) => {
     const { projectId, userId } = req.params;  // IDs del proyecto y del usuario
@@ -296,10 +294,7 @@ exports.getMemberBalance = async (req, res) => {
         const userBalances = await Balance.findAll({
             where: {
                 id_project: projectId,
-                [Op.or]: [
-                    { id_user_payer: userId },  // Si el usuario ha pagado
-                    { id_user_payed: userId }   // O si el usuario ha recibido pagos
-                ]
+                id_user_payer: userId // Filtrar solo por el usuario que ha pagado
             }
         });
 
@@ -307,7 +302,16 @@ exports.getMemberBalance = async (req, res) => {
             return res.status(404).json({ message: 'No se encontraron balances para este usuario en el proyecto' });
         }
         // Calcular el balance total
-        const totalBalance = userBalances.reduce((acc, balance) => acc + balance.amount, 0);
+        let totalBalance = 0;
+        console.log('')
+        console.log('')
+        console.log('')
+        for (const userBalance of userBalances) {
+            console.log('')
+            console.log(`ID DEL BALANCE: ${userBalance.id} \n AMOUNT DEL BALANCE: ${userBalance.amount} \n TOTAL BALANCE HASTA AHORA: ${totalBalance}`)
+            totalBalance = totalBalance + userBalance.amount;
+        }
+        // const totalBalance = userBalances.reduce((acc, balance) => acc + balance.amount, 0);
         res.status(200).json({ totalBalance });
     } catch (error) {
         console.error(error);
@@ -320,13 +324,17 @@ exports.getTotalSpentInProject = async (req, res) => {
     const { projectId } = req.params;  // ID del proyecto
     try {
         // Sumar todos los gastos asociados a este proyecto
-        const totalSpent = await Bill.sum('total_amount', {
+        const bills = await Bill.findAll({
             where: {
-                id_project: projectId
+                id_project: projectId,
             }
         });
-        if (totalSpent === null) {
+        if (bills === null) {
             return res.status(404).json({ message: 'No se encontraron gastos para este proyecto' });
+        }
+        let totalSpent = 0;
+        for (const bill of bills) {
+            totalSpent = totalSpent + bill.total_amount;
         }
         res.status(200).json({ totalSpent });
     } catch (error) {
@@ -335,32 +343,82 @@ exports.getTotalSpentInProject = async (req, res) => {
     }
 };
 
-// OBTENER EL TOTAL APORTADO POR UN USUARIO EN UN PROYECTO
+// OBTENER EL TOTAL APORTADO POR UN USUARII EN UN PROYECTO
 exports.getTotalContributedByUser = async (req, res) => {
     const { projectId, userId } = req.params;  // ID del proyecto y del usuario
     try {
         // Buscar todos los gastos del proyecto
         const bills = await Bill.findAll({
             where: {
-                id_project: projectId
+                id_project: projectId,
             }
         });
         if (!bills || bills.length === 0) {
             return res.status(404).json({ message: 'No se encontraron gastos para este proyecto' });
         }
+        const userBills = [];
+        for (const bill of bills) {
+            const newBill = await UserBill.findOne({ where: {id_bill: bill.id, id_user: userId} });
+            if (newBill!==null) {
+                userBills.push(newBill);
+            }
+        }
+        console.log("")
+        console.log("")
+        console.log(userBills)
+        console.log("")
         // Calcular el total aportado por el usuario
         let totalContributed = 0;
-        for (let bill of bills) {
-            const contributors = bill.contributors;  // Asumimos que la lista de contribuyentes se encuentra en el gasto
-            for (let contributor of contributors) {
-                if (contributor.userId === parseInt(userId)) {
-                    totalContributed += contributor.amount;
-                }
+        if (userBills.length>0) {
+            for (let userBill of userBills) {
+                totalContributed += userBill.partial_amount;
             }
         }
         res.status(200).json({ totalContributed });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Error al obtener el total aportado por el usuario en el proyecto', error });
+    }
+};
+
+// OBTENER EL BALANCE GENERAL DEL USUARIO EN SESIÓN EN TOTAL
+exports.getGeneralBalance = async (req, res) => {
+    try {
+        const userId = req.user.id; // Obtener el ID del usuario en sesión
+        console.log("")
+        console.log("")
+        console.log("CALCULANDO BALANCE GENERAL TOTAL DEL USUARIO " + userId)
+        console.log("")
+        console.log("")
+        // Validar que el usuario esté en sesión
+        if (!userId) {
+            return res.status(400).json({ message: 'ID de usuario inválido.' });
+        }
+
+        // Consultar todos los balances donde el usuario es pagador o pagado
+        const balances = await Balance.findAll({
+            where: { id_user_payer: userId }
+        });
+
+        if (!balances.length) {
+            return res.status(404).json({ message: 'No se encontraron balances para este usuario.' });
+        }
+
+        // Calcular el balance general
+        const generalBalance = balances.reduce((total, balance) => {
+            if (balance.id_user_payer === userId) {
+                // Si el usuario es pagador, resta el amount
+                return total - balance.amount;
+            } else if (balance.id_user_payed === userId) {
+                // Si el usuario es pagado, suma el amount
+                return total + balance.amount;
+            }
+            return total;
+        }, 0);
+
+        res.status(200).json({ generalBalance });
+    } catch (error) {
+        console.error('Error al obtener el balance general del usuario:', error.message);
+        res.status(500).json({ message: 'Error al obtener el balance general del usuario.', error });
     }
 };

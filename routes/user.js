@@ -1,5 +1,5 @@
 const express = require('express');
-const { signup, login, updateUser, updatePassword, deleteUser, getUserById, getUserByEmail, getUserByUsername } = require('../controllers/userController');
+const { signup, login, updateUser, updatePassword, deleteUser, getUserById, getUserByEmail, getUserByUsername, getFriends } = require('../controllers/userController');
 const authenticateToken = require('../middlewares/authMiddleware');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
@@ -46,7 +46,8 @@ router.get('/:id', authenticateToken, getUserById);
 router.get('/email', authenticateToken, getUserByEmail);
 // OBTENER USUARIO POR USERNAME
 router.get('/username', authenticateToken, getUserByUsername);
-
+// OBTENER "AMIGOS" DEL USUARIO EN SESIÓN
+router.get('/friends', authenticateToken, getFriends);
 
 
 module.exports = router;

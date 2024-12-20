@@ -32,5 +32,7 @@ const UserBill = sequelize.define('UserBill', {
 
 // Bill.belongsToMany(User, { through: UserBill });
 // User.belongsToMany(Bill, { through: UserBill });
+// UserBill.hasMany(Bill, { foreignKey: 'id_bill' });
+// UserBill.hasMany(User, { foreignKey: 'id_user' });
 
 module.exports = UserBill;

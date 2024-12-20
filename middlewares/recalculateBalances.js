@@ -1,9 +1,6 @@
+const { where } = require('sequelize');
 const { UserProject, Bill, UserBill, Balance } = require('../models');
 
-/**
- * Recalcula los balances de un proyecto actualizando los registros existentes en la tabla Balance.
- * @param {number} projectId - ID del proyecto cuyos balances se recalcularán.
- */
 const recalculateBalances = async (projectId) => {
     try {
         // Obtener los usuarios del proyecto y sus porcentajes
@@ -21,39 +18,69 @@ const recalculateBalances = async (projectId) => {
             percentage: up.percentage / 100 // Convertir porcentaje a decimal
         }));
 
-        // Obtener todos los gastos del proyecto y calcular el total gastado
+        // Obtener todas las facturas asociadas al proyecto
         const bills = await Bill.findAll({
             where: { id_project: projectId },
-            include: {
-                model: UserBill,
-                attributes: ['id_user', 'partial_amount']
-            }
+            attributes: ['total_amount'] // Solo necesitamos el total de cada factura
         });
 
-        const totalSpent = bills.reduce((sum, bill) => {
-            return sum + bill.UserBills.reduce((subSum, ub) => subSum + ub.partial_amount, 0);
-        }, 0);
+        // Calcular el total gastado sumando los montos de las facturas
+        const totalSpent = bills.reduce((sum, bill) => sum + bill.total_amount, 0);
+
+        console.log(`En total se gastó $${totalSpent}`);
 
         // Calcular el balance de cada usuario respecto al total
-        const userBalances = users.map(user => {
-            const shouldPay = user.percentage * totalSpent; // Lo que le corresponde pagar
-            const alreadyPaid = bills.reduce((sum, bill) => {
-                const userBill = bill.UserBills.find(ub => ub.id_user === user.id_user);
-                return sum + (userBill ? userBill.partial_amount : 0);
-            }, 0);
+        let userBalances = [];
+        for (const user of users) {
+            const shouldPay = totalSpent * user.percentage;
 
-            return {
+            // Obtener los pagos realizados por el usuario
+            const userBillsForUser = await UserBill.findAll({
+                where: { id_user: user.id_user },
+                attributes: ['partial_amount']
+            });
+
+            const alreadyPaid = userBillsForUser.reduce(
+                (sum, bill) => sum + (bill.partial_amount || 0),
+                0
+            );
+
+            const left = shouldPay - alreadyPaid;
+
+            console.log(`El usuario ${user.id_user} debe pagar $${shouldPay}, ya pagó $${alreadyPaid}, y debe en total $${left}.`);
+
+            userBalances.push({
                 id_user: user.id_user,
-                net_balance: shouldPay - alreadyPaid // Saldo neto (positivo si debe, negativo si pagó de más)
-            };
-        });
+                owes: left
+            });
+        }
 
+        // Obtener cuántas personas deben y a cuántas personas se les debe
+        let amountPayees = 0; // a cuántos se les debe
+        let amountPayers = 0; // cuántos deben
+        for (const member of userBalances) {
+            if (member.owes>0) {
+                amountPayers = amountPayers + 1;
+            } else if (member.owes<0) {
+                amountPayees = amountPayees + 1;
+            }
+        };
         // Actualizar los registros en la tabla Balance
         for (const payer of userBalances) {
             for (const payee of userBalances) {
                 if (payer.id_user !== payee.id_user) {
-                    const amount = (payer.net_balance - payee.net_balance) / (users.length - 1);
-
+                    let amount;
+                    if ((payer.owes<0 && payee.owes<0) || (payer.owes>0 && payee.owes>0)) {
+                        amount = 0;
+                    } else {
+                        if (payer.owes>0) {
+                            amount = Math.abs(payee.owes)/amountPayers;
+                        } else if (payer.owes<0) {
+                            amount = payer.owes/amountPayees;
+                        } else {
+                            amount = 0;
+                        }
+                    }
                     await Balance.update(
                         { amount },
                         {

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { createProject, updateProject, deleteProject, getProjectById, getProjectByName, getProjects, addMemberToProject, deleteMemberFromProject, getProjectMembers, getMemberBalance, getTotalSpentInProject, getTotalContributedByUser } = require('../controllers/projectController');
+const { createProject, updateProject, deleteProject, getProjectById, getProjectByName, getProjects, addMemberToProject, deleteMemberFromProject, getProjectMembers, getMemberBalance, getTotalSpentInProject, getTotalContributedByUser, getGeneralBalance } = require('../controllers/projectController');
 const { updateDistributionPercentages } = require('../controllers/userProjectController');
 const authenticateToken = require('../middlewares/authMiddleware'); 
 const { body, validationResult } = require('express-validator');
@@ -53,17 +53,16 @@ router.post('/add-member', authenticateToken, [
 router.delete('/member', authenticateToken, deleteMemberFromProject);
 // OBTENER TODOS LOS MIEMBROS DE UN PROYECTO
 router.get('/members/:projectId', authenticateToken, getProjectMembers);
-
 // OBTENER EL BALANCE GENERAL DE UN MIEMBRO DE UN PROYECTO
 router.get('/member-balance/:projectId/:userId', authenticateToken, getMemberBalance);
 // OBTENER TOTAL GASTADO EN UN PROYECTO
 router.get('/spent/:projectId', authenticateToken, getTotalSpentInProject);
-// OBTENER TOTAL GASTADO POR EL USUARIO EN SESIÓN
+// OBTENER TOTAL GASTADO POR UN USUARIO EN UN PROYECTO
 router.get('/total-contributed/:projectId/:userId', authenticateToken, getTotalContributedByUser);
-
 // MODIFICAR PORCENTAJES DE DISTRIBUCIÓN DEL PROYECTO
 router.put('/redistribute/:projectId', authenticateToken, updateDistributionPercentages);
-
+// OBTENER EL BALANCE GENERAL DEL USUARIO EN SESIÓN EN TOTAL
+router.get('/gral-balance', authenticateToken, getGeneralBalance);
 
 // router.get('/:projectId/my-ticket-balances', authenticateToken, projectController.getUserTicketBalances);
 // router.get('/:projectId/user-balances', authenticateToken, projectController.getUserBalancesInProject);
